@@ -110,18 +110,18 @@ export async function runDoctor(config: AppConfig, options: DoctorOptions = {}):
   if (platformKind === 'dingtalk') {
     lines.push(formatCheckResult(Boolean(config.dingtalk.clientId), 'dingtalk.client_id'));
     lines.push(formatCheckResult(Boolean(config.dingtalk.clientSecret), 'dingtalk.client_secret'));
-    lines.push(formatCheckResult(config.dingtalk.allowedUserIds.length > 0, 'dingtalk.allowed_user_ids', config.dingtalk.allowedUserIds.join(', ')));
+    lines.push(formatCheckResult(true, 'dingtalk.allowed_user_ids', config.dingtalk.allowedUserIds.length > 0 ? config.dingtalk.allowedUserIds.join(', ') : 'not set (allow all users)'));
   }
 
   if (platformKind === 'feishu') {
     lines.push(formatCheckResult(Boolean(config.feishu.appId), 'feishu.app_id'));
     lines.push(formatCheckResult(Boolean(config.feishu.appSecret), 'feishu.app_secret'));
-    lines.push(formatCheckResult(config.feishu.allowedUserIds.length > 0, 'feishu.allowed_user_ids', config.feishu.allowedUserIds.join(', ')));
+    lines.push(formatCheckResult(true, 'feishu.allowed_user_ids', config.feishu.allowedUserIds.length > 0 ? config.feishu.allowedUserIds.join(', ') : 'not set (allow all users)'));
   }
 
   if (platformKind === 'telegram') {
     lines.push(formatCheckResult(Boolean(config.telegram.botToken), 'telegram.bot_token'));
-    lines.push(formatCheckResult(config.telegram.allowedUserIds.length > 0, 'telegram.allowed_user_ids', config.telegram.allowedUserIds.join(', ')));
+    lines.push(formatCheckResult(true, 'telegram.allowed_user_ids', config.telegram.allowedUserIds.length > 0 ? config.telegram.allowedUserIds.join(', ') : 'not set (allow all users)'));
     lines.push(formatCheckResult(config.telegram.pollTimeoutSeconds > 0, 'telegram.poll_timeout_seconds', String(config.telegram.pollTimeoutSeconds)));
     lines.push(formatCheckResult(Boolean(config.telegram.mode), 'telegram.mode', config.telegram.mode));
     if (config.telegram.mode === 'webhook') {

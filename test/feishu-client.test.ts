@@ -26,7 +26,7 @@ test('normalizeFeishuMessage parses text event', () => {
   assert.equal(message.replyContext.messageId, 'om_1');
 });
 
-test('FeishuClient.replyText replies by message id with post payload', async () => {
+test('FeishuClient.replyText replies by message id with text payload', async () => {
   const calls = [];
   const client = new FeishuClient({ appId: 'app', appSecret: 'secret', allowedUserIds: ['u1'] }, {
     apiClient: {
@@ -54,10 +54,36 @@ test('FeishuClient.replyText replies by message id with post payload', async () 
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], 'reply');
   assert.equal(calls[0][1].path.message_id, 'om_1');
-  assert.equal(calls[0][1].data.msg_type, 'post');
+  assert.equal(calls[0][1].data.msg_type, 'text');
   const content = JSON.parse(calls[0][1].data.content);
-  assert.equal(content.post.zh_cn.title, 'hello');
-  assert.equal(content.post.zh_cn.content[0][0].text, '# hello');
-  assert.equal(content.post.zh_cn.content[1][0].text, ' ');
-  assert.equal(content.post.zh_cn.content[2][0].text, 'world');
+  assert.equal(content.text, '# hello\n\nworld');
+});
+
+test('FeishuClient.replyText keeps angle brackets in stack traces', async () => {
+  const calls = [];
+  const client = new FeishuClient({ appId: 'app', appSecret: 'secret', allowedUserIds: [] }, {
+    apiClient: {
+      im: {
+        v1: {
+          message: {
+            async reply(payload) {
+              calls.push(payload);
+            },
+          },
+        },
+      },
+    },
+    sdk: {
+      Client: class {},
+      WSClient: class {},
+    },
+  });
+
+  await client.replyText(
+    { messageId: 'om_2', chatId: 'oc_2' },
+    '处理失败：AxiosError\n    at async <anonymous> (/tmp/file.ts:1:1)',
+  );
+
+  const content = JSON.parse(calls[0].data.content);
+  assert.equal(content.text.includes('<anonymous>'), true);
 });

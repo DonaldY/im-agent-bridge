@@ -36,6 +36,31 @@ enabled = ["codex", "claude"]
   assert.deepEqual(config.agents.enabled, ['codex', 'claude']);
 });
 
+test('loadConfig allows empty dingtalk allowed_user_ids', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));
+  const configPath = path.join(tempDir, 'config.toml');
+
+  await fs.writeFile(configPath, `
+[platform]
+kind = "dingtalk"
+
+[dingtalk]
+client_id = "cid"
+client_secret = "secret"
+allowed_user_ids = []
+
+[bridge]
+default_agent = "codex"
+working_dir = "${tempDir}"
+
+[agents]
+enabled = ["codex"]
+`, 'utf8');
+
+  const config = await loadConfig(configPath);
+  assert.deepEqual(config.dingtalk.allowedUserIds, []);
+});
+
 test('loadConfig enables debug via IAB_DEBUG even when config is false', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));
   const configPath = path.join(tempDir, 'config.toml');

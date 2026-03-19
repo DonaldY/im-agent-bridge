@@ -435,6 +435,24 @@ export async function runServiceCommand(
   const action = (subcommand || '').trim().toLowerCase();
   const label = options.label;
 
+  if (!action) {
+    requireDarwin();
+    const paths = resolveServicePaths(label);
+    if (await fileExists(paths.plistPath)) {
+      return startService(label);
+    }
+
+    if (!configLoader) {
+      throw new Error('config is required for service install');
+    }
+
+    const config = await configLoader();
+    return installService(config, {
+      label,
+      keepAwake: normalizeKeepAwakeMode(options.keepAwake),
+    });
+  }
+
   if (action === 'install') {
     if (!configLoader) {
       throw new Error('config is required for service install');
@@ -471,9 +489,10 @@ export async function runServiceCommand(
     return formatServiceLogs(logs);
   }
 
-  if (!action || action === 'help') {
+  if (action === 'help') {
     return [
       'Usage:',
+      '  im-agent-bridge service                                        # install/start (smart mode)',
       '  im-agent-bridge service install [--config path] [--label value] [--keepawake none|idle|system|on_ac]',
       '  im-agent-bridge service start [--label value]',
       '  im-agent-bridge service stop [--label value]',

@@ -5,16 +5,16 @@ kind = "dingtalk"
 client_id = "dingxxxxxxxxxxxxxxxx"
 client_secret = "xxxxxxxxxxxxxxxxxxxxxxxx"
 robot_code = "dingxxxxxxxxxxxxxxxx"
-allowed_user_ids = ["your_staff_id"]
+allowed_user_ids = []
 
 [feishu]
 app_id = "cli_xxxxxxxxxxxxxxxx"
 app_secret = "xxxxxxxxxxxxxxxxxxxxxxxx"
-allowed_user_ids = ["ou_xxxxxxxxxxxxxxxx"]
+allowed_user_ids = []
 
 [telegram]
 bot_token = "123456789:your_bot_token"
-allowed_user_ids = ["123456789"]
+allowed_user_ids = []
 api_base = "https://api.telegram.org"
 mode = "poll"
 poll_timeout_seconds = 20

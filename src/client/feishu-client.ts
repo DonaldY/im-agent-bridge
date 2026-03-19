@@ -48,34 +48,15 @@ function extractTextContent(event: FeishuMessageEvent): string {
   }
 }
 
-function stripMarkdownDecorators(text: string): string {
-  return String(text || '')
-    .replace(/^[#>\-\s]+/gmu, '')
-    .replace(/[*_`~]+/gu, '')
-    .replace(/\s+/gu, ' ')
-    .trim();
-}
-
-function buildPostPayload(text: string): { msg_type: 'post'; content: string } {
-  const normalized = typeof text === 'string' && text.trim() ? text.replace(/\r\n/gu, '\n') : ' ';
-  const lines = normalized.split('\n');
-  const titleSource = lines.find((line) => stripMarkdownDecorators(line)) || normalized;
-  const title = stripMarkdownDecorators(titleSource).slice(0, 64) || 'im-agent-bridge';
-  const content = lines.map((line) => [{
-    tag: 'text',
-    text: line || ' ',
-    un_escape: true,
-  }]);
+function buildTextPayload(text: string): { msg_type: 'text'; content: string } {
+  const normalized = typeof text === 'string' && text.trim()
+    ? text.replace(/\r\n/gu, '\n')
+    : ' ';
 
   return {
-    msg_type: 'post',
+    msg_type: 'text',
     content: JSON.stringify({
-      post: {
-        zh_cn: {
-          title,
-          content,
-        },
-      },
+      text: normalized,
     }),
   };
 }
@@ -163,7 +144,7 @@ export class FeishuClient extends BaseClient<FeishuConfig> {
   async replyText(replyContext: FeishuReplyContext, text: string, options: ReplyTextOptions = {}): Promise<SentMessageRef | null> {
     const rendered = renderReply('feishu', text, options);
     const payload = {
-      data: buildPostPayload(rendered.text),
+      data: buildTextPayload(rendered.text),
     };
 
     if (replyContext?.messageId) {
@@ -218,7 +199,7 @@ export class FeishuClient extends BaseClient<FeishuConfig> {
       path: {
         message_id: message.messageId,
       },
-      data: buildPostPayload(rendered.text),
+      data: buildTextPayload(rendered.text),
     });
   }
 }

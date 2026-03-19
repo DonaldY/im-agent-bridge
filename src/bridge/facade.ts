@@ -33,12 +33,17 @@ function getPlatformAllowedUserIds(config: AppConfig, platform: PlatformKind): s
 }
 
 function isAllowedUser(config: AppConfig, incomingMessage: IncomingMessage): boolean {
+  const allowedUserIds = getPlatformAllowedUserIds(config, incomingMessage.platform);
+  if (allowedUserIds.length === 0) {
+    return true;
+  }
+
   const candidates = [
     incomingMessage.userId,
     ...(Array.isArray(incomingMessage.userIds) ? incomingMessage.userIds : []),
   ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
 
-  const allowedSet = new Set(getPlatformAllowedUserIds(config, incomingMessage.platform));
+  const allowedSet = new Set(allowedUserIds);
   return candidates.some((value) => allowedSet.has(value));
 }
 

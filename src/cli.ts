@@ -5,6 +5,7 @@ import { createPlatformClient } from './client/index.js';
 import { BridgeFacade } from './bridge/index.js';
 import { runDoctor } from './doctor.js';
 import { runServiceCommand } from './service/index.js';
+import { runSetup } from './setup.js';
 import { toErrorMessage } from './utils.js';
 
 function printUsage() {
@@ -12,7 +13,8 @@ function printUsage() {
     'Usage:',
     '  im-agent-bridge serve [--config path]',
     '  im-agent-bridge doctor [--config path] [--remote]',
-    '  im-agent-bridge service <install|start|stop|restart|status|logs|uninstall> [options]',
+    '  im-agent-bridge setup [--config path]',
+    '  im-agent-bridge service [install|start|stop|restart|status|logs|uninstall] [options]',
     '    --label value',
     '    --keepawake none|idle|system|on_ac   (service install only)',
     '    --lines number                       (service logs only)',
@@ -107,6 +109,11 @@ async function main() {
     return;
   }
 
+  if (command === 'setup') {
+    console.log(await runSetup(options.configPath));
+    return;
+  }
+
   if (command === 'serve') {
     const config = await loadConfig(options.configPath);
     applyRuntimeEnvironment(config);
@@ -117,13 +124,11 @@ async function main() {
   if (command === 'service') {
     const output = await runServiceCommand(
       serviceSubcommand,
-      serviceSubcommand === 'install'
-        ? async () => {
-          const config = await loadConfig(options.configPath);
-          applyRuntimeEnvironment(config);
-          return config;
-        }
-        : null,
+      async () => {
+        const config = await loadConfig(options.configPath);
+        applyRuntimeEnvironment(config);
+        return config;
+      },
       {
         label: options.label,
         keepAwake: options.keepAwake,

@@ -65,7 +65,7 @@ export function buildHelpText(config: AppConfig): string {
     '• `/help` 查看帮助',
     '• `/new` 新建逻辑会话',
     `• \`/use <${config.agents.enabled.join('|')}>\` 切换当前 agent`,
-    '• `/set_working_dir <path>` 设置当前会话工作目录',
+    '• `/set_working_dir <path>` 设置当前会话工作目录, 沙箱限制',
     '• `/status` 查看当前会话状态',
     '• `/interrupt` 中断当前处理中任务',
     'ℹ️ 说明',

@@ -139,6 +139,37 @@ test('BridgeFacade deduplicates repeated messages', async () => {
   assert.deepEqual(replies, ['🤖 已收到，正在思考中…', 'once']);
 });
 
+test('BridgeFacade allows all users when allowed_user_ids is empty', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+
+  const replies = [];
+  const config = createConfig(stateDir, workingDir);
+  config.dingtalk.allowedUserIds = [];
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text) {
+      replies.push(text);
+    },
+  }, {
+    async *streamAgentTurnImpl() {
+      yield { type: 'final_text', text: 'ok' };
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'dingtalk',
+    userId: 'not-in-whitelist',
+    conversationType: '1',
+    messageId: 'm-empty-allowlist',
+    text: 'hello',
+    replyContext: { sessionWebhook: 'https://example.com/hook', sessionWebhookExpiredTime: Date.now() + 60_000 },
+  });
+
+  assert.deepEqual(replies, ['🤖 已收到，正在思考中…', 'ok']);
+});
+
 test('BridgeFacade handles /set_working_dir with quoted relative path', async () => {
   const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
   const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));

@@ -40,9 +40,6 @@ export function validatePlatformConfig(platformKind: PlatformKind, config: AppCo
     if (!config.dingtalk.clientSecret) {
       throw new Error('dingtalk.client_secret is required');
     }
-    if (config.dingtalk.allowedUserIds.length === 0) {
-      throw new Error('dingtalk.allowed_user_ids must be a non-empty array');
-    }
     return;
   }
 
@@ -53,17 +50,11 @@ export function validatePlatformConfig(platformKind: PlatformKind, config: AppCo
     if (!config.feishu.appSecret) {
       throw new Error('feishu.app_secret is required');
     }
-    if (config.feishu.allowedUserIds.length === 0) {
-      throw new Error('feishu.allowed_user_ids must be a non-empty array');
-    }
     return;
   }
 
   if (!config.telegram.botToken) {
     throw new Error('telegram.bot_token is required');
-  }
-  if (config.telegram.allowedUserIds.length === 0) {
-    throw new Error('telegram.allowed_user_ids must be a non-empty array');
   }
 }
 
