@@ -291,6 +291,11 @@ export class BridgeFacade {
       return null;
     }
 
+    if (session.activeAgent === 'claude') {
+      await this.rejectImageInput(incomingMessage, '当前 Agent `claude` 暂不支持图片输入，请先发送 `/use codex` 后再重试。');
+      return null;
+    }
+
     if (images.length > 1) {
       await this.rejectImageInput(incomingMessage, '单轮仅支持 1 张图片，请重新发送。');
       return null;
@@ -346,6 +351,7 @@ export class BridgeFacade {
     }
 
     const lines = [
+      `Analyze this image: ${filePath}`,
       '你将收到一张用户上传的图片，请先读取并理解图片内容，再回答用户问题。',
       `图片文件路径：${filePath}`,
       `图片类型：${actualMime}`,

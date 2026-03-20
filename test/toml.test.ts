@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseToml } from '../src/toml';
+import { parseToml } from '../src/toml.js';
 
 test('parseToml parses nested sections and arrays', () => {
   const result = parseToml(`

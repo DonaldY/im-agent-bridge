@@ -59,9 +59,25 @@ function formatAgentOptions(agents: string[]): string {
   return agents.map((agent) => `\`${agent}\``).join('、');
 }
 
+function formatImageStatusText(config: AppConfig, session: SessionRecord): string {
+  if (!config.bridge.imageEnabled) {
+    return '• 图片输入：已关闭';
+  }
+
+  if (session.platform === 'telegram') {
+    return '• 图片输入：当前平台 Telegram 暂不支持';
+  }
+
+  if (session.activeAgent === 'claude') {
+    return '• 图片输入：当前 Agent `claude` 暂不支持，请先发送 `/use codex`';
+  }
+
+  return `• 图片输入：可用（当前 Agent：\`${session.activeAgent}\`）`;
+}
+
 export function buildHelpText(config: AppConfig): string {
   const imageSupportText = config.bridge.imageEnabled
-    ? `• 当前支持飞书/钉钉单图输入（格式：image/png、image/jpeg、image/webp、image/gif；大小：${config.bridge.imageMaxMb}MB）`
+    ? `• 当前支持飞书/钉钉单图输入（仅 \`codex\` agent；格式：image/png、image/jpeg、image/webp、image/gif；大小：${config.bridge.imageMaxMb}MB）`
     : '• 当前已关闭图片输入，仅支持文本消息';
 
   return [
@@ -215,9 +231,11 @@ export async function handleBridgeCommand(
   if (command === '/status') {
     const current = context.store.getActiveSession(incomingMessage.userId) || session;
     const currentRun = context.getRunState(current.id);
+    const statusText = formatStatusText(current, currentRun, context.getSessionWorkingDir(current));
+    const imageStatusText = formatImageStatusText(context.config, current);
     await context.replyText(
       incomingMessage.replyContext,
-      formatStatusText(current, currentRun, context.getSessionWorkingDir(current)),
+      `${statusText}\n\n${imageStatusText}`,
       {
         messageId: incomingMessage.messageId,
         sessionId: current.id,

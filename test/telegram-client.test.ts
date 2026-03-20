@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TelegramClient, normalizeTelegramUpdate } from '../src/client/telegram-client';
+import { TelegramClient, normalizeTelegramUpdate } from '../src/client/telegram-client.js';
 
 test('normalizeTelegramUpdate parses private text message', () => {
   const message = normalizeTelegramUpdate({

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { BridgeFacade, buildHelpText } from '../src/bridge';
-import { StateStore } from '../src/storage';
+import { BridgeFacade, buildHelpText } from '../src/bridge/index.js';
+import { StateStore } from '../src/storage/index.js';
 
 function createConfig(stateDir, workingDir) {
   return {
@@ -69,6 +69,39 @@ test('BridgeFacade handles /use command', async () => {
   assert.equal(replies.length, 1);
   assert.match(replies[0], /已切换当前 Agent/u);
   assert.match(replies[0], /当前 Agent：`claude`/u);
+});
+
+test('BridgeFacade /status shows image unavailable for claude', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+  await store.createSession('u1', 'claude', workingDir);
+
+  const replies = [];
+  const config = createConfig(stateDir, workingDir);
+  config.bridge.replyChunkChars = 500;
+
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text) {
+      replies.push(text);
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'dingtalk',
+    userId: 'u1',
+    conversationType: '1',
+    messageId: 'm-status-claude',
+    text: '/status',
+    replyContext: { sessionWebhook: 'https://example.com/hook', sessionWebhookExpiredTime: Date.now() + 60_000 },
+  });
+
+  assert.equal(replies.length, 1);
+  assert.match(replies[0], /会话状态/u);
+  assert.match(replies[0], /当前 Agent：`claude`/u);
+  assert.match(replies[0], /图片输入：当前 Agent `claude` 暂不支持/u);
+  assert.match(replies[0], /use codex/u);
 });
 
 test('BridgeFacade handles prompt and saves provider session', async () => {
@@ -348,6 +381,48 @@ test('BridgeFacade rejects image when image input is disabled', async () => {
   assert.match(replies[0], /未开启图片输入能力/u);
 });
 
+test('BridgeFacade rejects image when active agent is claude', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+  await store.createSession('u1', 'claude', workingDir);
+
+  const replies = [];
+  let downloadCalled = false;
+  const config = createConfig(stateDir, workingDir);
+  config.bridge.replyChunkChars = 500;
+
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text) {
+      replies.push(text);
+    },
+    async downloadImage() {
+      downloadCalled = true;
+      return {
+        buffer: Buffer.from('fake-image-data'),
+        mimeType: 'image/png',
+        sizeBytes: 15,
+      };
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'dingtalk',
+    userId: 'u1',
+    conversationType: '1',
+    messageId: 'm-image-claude',
+    text: '',
+    images: [{ fileKey: 'download-code-1', mimeType: 'image/png' }],
+    replyContext: { platform: 'dingtalk', sessionWebhook: 'https://example.com/hook', robotCode: 'ding_robot' },
+  });
+
+  assert.equal(downloadCalled, false);
+  assert.equal(replies.length, 1);
+  assert.match(replies[0], /claude/u);
+  assert.match(replies[0], /use codex/u);
+});
+
 test('BridgeFacade converts image input into prompt text', async () => {
   const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
   const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
@@ -387,6 +462,7 @@ test('BridgeFacade converts image input into prompt text', async () => {
   });
 
   assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /Analyze this image:/u);
   assert.match(prompts[0], /图片文件路径/u);
   assert.match(prompts[0], /这张图讲了什么/u);
   assert.deepEqual(replies, ['🤖 已收到，正在思考中…', 'ok']);

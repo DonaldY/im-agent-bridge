@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { loadConfig } from '../src/config';
+import { loadConfig } from '../src/config/index.js';
 
 test('loadConfig reads dingtalk config', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));

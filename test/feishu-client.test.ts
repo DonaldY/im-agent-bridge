@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { FeishuClient, normalizeFeishuMessage } from '../src/client/feishu-client';
+import { FeishuClient, normalizeFeishuMessage } from '../src/client/feishu-client.js';
 
 test('normalizeFeishuMessage parses text event', () => {
   const message = normalizeFeishuMessage({
