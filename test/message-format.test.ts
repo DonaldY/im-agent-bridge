@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderReply, splitMarkdownBlocks, takeStableMarkdownStream } from '../src/client/message-format.js';
+import { renderReply, splitMarkdownBlocks, takeStableMarkdownStream } from '../src/client/message-format';
 
 test('renderReply for telegram supports rich markdown features', () => {
   const rendered = renderReply('telegram', [

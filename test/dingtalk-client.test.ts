@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DingTalkClient, normalizeRobotMessage } from '../src/client/dingtalk-client.js';
+import { DingTalkClient, normalizeRobotMessage } from '../src/client/dingtalk-client';
 
 test('normalizeRobotMessage prefers senderStaffId', () => {
   const message = normalizeRobotMessage({
@@ -40,6 +40,25 @@ test('normalizeRobotMessage prefers business msgId for dedupe', () => {
   assert.equal(message.messageId, 'biz-1');
 });
 
+test('normalizeRobotMessage parses picture message', () => {
+  const message = normalizeRobotMessage({
+    headers: { messageId: 'transport-2' },
+    data: JSON.stringify({
+      msgId: 'biz-2',
+      senderStaffId: 'staff-1',
+      conversationId: 'cid',
+      sessionWebhook: 'https://example.com/hook',
+      robotCode: 'ding_robot',
+      msgtype: 'picture',
+      content: JSON.stringify({ pictureDownloadCode: 'download-code-1' }),
+    }),
+  });
+
+  assert.equal(message.text, '');
+  assert.equal(message.images.length, 1);
+  assert.equal(message.images[0].fileKey, 'download-code-1');
+});
+
 test('DingTalkClient.replyText posts text payload', async () => {
   let request;
   const client = new DingTalkClient({ clientId: 'cid', clientSecret: 'secret' }, {
@@ -65,4 +84,62 @@ test('DingTalkClient.replyText posts text payload', async () => {
   assert.equal(body.msgtype, 'markdown');
   assert.equal(body.markdown.text, 'hello');
   assert.match(body.markdown.title, /hello/u);
+});
+
+test('DingTalkClient.downloadImage resolves download url and fetches file', async () => {
+  const requests = [];
+  const client = new DingTalkClient({ clientId: 'cid', clientSecret: 'secret', robotCode: 'ding_robot' }, {
+    fetchImpl: async (url, init = {}) => {
+      requests.push({ url, init });
+
+      if (String(url).includes('/gettoken')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'token_1', expires_in: 7200 }),
+        };
+      }
+
+      if (url === 'https://api.dingtalk.com/v1.0/robot/messageFiles/download') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ downloadUrl: 'https://example.com/image.png' }),
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        headers: {
+          get(name) {
+            if (name === 'content-type') {
+              return 'image/png';
+            }
+            if (name === 'content-length') {
+              return '4';
+            }
+            return null;
+          },
+        },
+        arrayBuffer: async () => Buffer.from('test'),
+      };
+    },
+  });
+
+  const result = await client.downloadImage(
+    {
+      platform: 'dingtalk',
+      userId: 'u1',
+      text: '',
+      replyContext: { platform: 'dingtalk', sessionWebhook: 'https://example.com/hook', robotCode: 'ding_robot' },
+    },
+    { fileKey: 'download-code-1' },
+    { maxBytes: 20 },
+  );
+
+  assert.equal(result.mimeType, 'image/png');
+  assert.equal(result.sizeBytes, 4);
+  assert.equal(result.buffer.toString('utf8'), 'test');
+  assert.equal(requests.length, 3);
 });

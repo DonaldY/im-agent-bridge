@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { loadConfig } from '../src/config/index.js';
+import { loadConfig } from '../src/config';
 
 test('loadConfig reads dingtalk config', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));
@@ -33,7 +33,60 @@ enabled = ["codex", "claude"]
   assert.equal(config.dingtalk.clientId, 'cid');
   assert.equal(config.bridge.defaultAgent, 'codex');
   assert.equal(config.bridge.debug, true);
+  assert.equal(config.bridge.imageEnabled, true);
+  assert.equal(config.bridge.imageMaxMb, 20);
   assert.deepEqual(config.agents.enabled, ['codex', 'claude']);
+});
+
+test('loadConfig reads bridge image config', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));
+  const configPath = path.join(tempDir, 'config.toml');
+
+  await fs.writeFile(configPath, `
+[platform]
+kind = "dingtalk"
+
+[dingtalk]
+client_id = "cid"
+client_secret = "secret"
+
+[bridge]
+default_agent = "codex"
+working_dir = "${tempDir}"
+image_enabled = false
+image_max_mb = 8
+
+[agents]
+enabled = ["codex"]
+`, 'utf8');
+
+  const config = await loadConfig(configPath);
+  assert.equal(config.bridge.imageEnabled, false);
+  assert.equal(config.bridge.imageMaxMb, 8);
+});
+
+test('loadConfig rejects invalid bridge.image_max_mb', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));
+  const configPath = path.join(tempDir, 'config.toml');
+
+  await fs.writeFile(configPath, `
+[platform]
+kind = "dingtalk"
+
+[dingtalk]
+client_id = "cid"
+client_secret = "secret"
+
+[bridge]
+default_agent = "codex"
+working_dir = "${tempDir}"
+image_max_mb = 0
+
+[agents]
+enabled = ["codex"]
+`, 'utf8');
+
+  await assert.rejects(() => loadConfig(configPath), /bridge.image_max_mb must be a positive number/u);
 });
 
 test('loadConfig allows empty dingtalk allowed_user_ids', async () => {

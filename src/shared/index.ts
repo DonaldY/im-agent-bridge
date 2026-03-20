@@ -1,4 +1,4 @@
-export type AgentName = 'claude' | 'codex' | 'neovate' | 'opencode';
+export type AgentName = 'claude' | 'codex';
 export type PlatformKind = 'dingtalk' | 'feishu' | 'telegram';
 export type TelegramMode = 'poll' | 'webhook';
 

@@ -34,13 +34,15 @@ debug = false
 reply_chunk_chars = 1500
 reply_mode = "stream"
 dedupe_ttl_ms = 600000
+image_enabled = true
+image_max_mb = 20
 
 [network]
 proxy_url = ""
 no_proxy = ""
 
 [agents]
-enabled = ["codex", "claude", "neovate", "opencode"]
+enabled = ["codex", "claude"]
 
 [agents.codex]
 bin = "codex"
@@ -49,15 +51,5 @@ extra_args = []
 
 [agents.claude]
 bin = "claude"
-model = ""
-extra_args = []
-
-[agents.neovate]
-bin = "neovate"
-model = ""
-extra_args = []
-
-[agents.opencode]
-bin = "opencode"
 model = ""
 extra_args = []

@@ -1,9 +1,17 @@
 import * as Lark from '@larksuiteoapi/node-sdk';
+import { Readable } from 'node:stream';
 import type { LoggerLike } from '../shared/index.js';
 import type { FeishuConfig } from '../config/types.js';
 import { renderReply } from './message-format.js';
 import type { ReplyTextOptions } from './message-format.js';
-import type { FeishuReplyContext, IncomingMessage, SentMessageRef } from './types.js';
+import type {
+  DownloadImageOptions,
+  DownloadedImageFile,
+  FeishuReplyContext,
+  IncomingImageAttachment,
+  IncomingMessage,
+  SentMessageRef,
+} from './types.js';
 import { BaseClient } from './base-client.js';
 import { toErrorMessage } from '../utils.js';
 
@@ -35,6 +43,11 @@ interface FeishuMessageEvent {
   };
 }
 
+interface FeishuMessageContent {
+  text?: string;
+  image_key?: string;
+}
+
 function extractTextContent(event: FeishuMessageEvent): string {
   if (event?.message?.message_type !== 'text') {
     return '';
@@ -46,6 +59,73 @@ function extractTextContent(event: FeishuMessageEvent): string {
   } catch {
     return '';
   }
+}
+
+function parseMessageContent(event: FeishuMessageEvent): FeishuMessageContent {
+  try {
+    return JSON.parse(event?.message?.content || '{}') as FeishuMessageContent;
+  } catch {
+    return {};
+  }
+}
+
+function extractImageAttachments(event: FeishuMessageEvent): IncomingImageAttachment[] {
+  if (event?.message?.message_type !== 'image') {
+    return [];
+  }
+
+  const content = parseMessageContent(event);
+  if (!content.image_key) {
+    return [];
+  }
+
+  return [{ fileKey: content.image_key.trim() }];
+}
+
+function normalizeMimeType(value?: string): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.split(';')[0].trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized === 'image/jpg' ? 'image/jpeg' : normalized;
+}
+
+function readHeaderValue(headers: Record<string, unknown> | undefined, key: string): string | undefined {
+  if (!headers) {
+    return undefined;
+  }
+
+  const target = key.toLowerCase();
+  for (const [header, value] of Object.entries(headers)) {
+    if (header.toLowerCase() !== target) {
+      continue;
+    }
+    return Array.isArray(value) ? String(value[0] || '') : String(value || '');
+  }
+
+  return undefined;
+}
+
+async function streamToBuffer(stream: Readable, maxBytes: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+
+  for await (const chunk of stream) {
+    const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += bufferChunk.length;
+    if (total > maxBytes) {
+      stream.destroy();
+      throw new Error(`image size exceeds limit ${maxBytes} bytes`);
+    }
+    chunks.push(bufferChunk);
+  }
+
+  return Buffer.concat(chunks, total);
 }
 
 function buildTextPayload(text: string): { msg_type: 'text'; content: string } {
@@ -88,6 +168,7 @@ export function normalizeFeishuMessage(event: FeishuMessageEvent): IncomingMessa
     conversationType: event.message.chat_type,
     messageId: event.message.message_id,
     text: extractTextContent(event),
+    images: extractImageAttachments(event),
     replyContext: {
       platform: 'feishu',
       chatId: event.message.chat_id,
@@ -201,5 +282,48 @@ export class FeishuClient extends BaseClient<FeishuConfig> {
       },
       data: buildTextPayload(rendered.text),
     });
+  }
+
+  async downloadImage(
+    incomingMessage: IncomingMessage,
+    image: IncomingImageAttachment,
+    options: DownloadImageOptions,
+  ): Promise<DownloadedImageFile> {
+    if (!incomingMessage?.messageId) {
+      throw new Error('messageId is required for Feishu image download');
+    }
+    if (!image?.fileKey) {
+      throw new Error('fileKey is required for Feishu image download');
+    }
+
+    const resource = await this.apiClient.im.v1.messageResource.get({
+      path: {
+        message_id: incomingMessage.messageId,
+        file_key: image.fileKey,
+      },
+      params: {
+        type: 'image',
+      },
+    });
+
+    const rawLength = Number(readHeaderValue(resource?.headers, 'content-length'));
+    if (Number.isFinite(rawLength) && rawLength > options.maxBytes) {
+      throw new Error(`image size exceeds limit ${options.maxBytes} bytes`);
+    }
+
+    const stream = resource?.getReadableStream?.();
+    if (!stream) {
+      throw new Error('failed to read Feishu image stream');
+    }
+
+    const buffer = await streamToBuffer(stream, options.maxBytes);
+    const sizeBytes = Number.isFinite(rawLength) && rawLength > 0 ? rawLength : buffer.length;
+
+    return {
+      buffer,
+      sizeBytes,
+      mimeType: normalizeMimeType(readHeaderValue(resource?.headers, 'content-type')) || image.mimeType,
+      fileName: image.fileName,
+    };
   }
 }

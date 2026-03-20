@@ -47,6 +47,8 @@ export interface BridgeConfig {
   replyChunkChars: number;
   replyMode: 'final_only' | 'stream';
   dedupeTtlMs: number;
+  imageEnabled: boolean;
+  imageMaxMb: number;
 }
 
 export interface AppConfig {

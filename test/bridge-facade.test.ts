@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { BridgeFacade, buildHelpText } from '../src/bridge/index.js';
-import { StateStore } from '../src/storage/index.js';
+import { BridgeFacade, buildHelpText } from '../src/bridge';
+import { StateStore } from '../src/storage';
 
 function createConfig(stateDir, workingDir) {
   return {
@@ -21,13 +21,13 @@ function createConfig(stateDir, workingDir) {
       replyChunkChars: 20,
       replyMode: 'final_only',
       dedupeTtlMs: 60_000,
+      imageEnabled: true,
+      imageMaxMb: 20,
     },
     agents: {
       enabled: ['codex', 'claude'],
       codex: { bin: 'codex', extraArgs: [] },
       claude: { bin: 'claude', extraArgs: [] },
-      neovate: { bin: 'neovate', extraArgs: [] },
-      opencode: { bin: 'opencode', extraArgs: [] },
     },
   };
 }
@@ -37,6 +37,7 @@ test('buildHelpText includes enabled agents', () => {
   assert.match(text, /codex\|claude/u);
   assert.match(text, /set_working_dir/u);
   assert.match(text, /interrupt/u);
+  assert.match(text, /image\/png/u);
 });
 
 test('BridgeFacade handles /use command', async () => {
@@ -315,4 +316,78 @@ test('BridgeFacade streams updates for editable clients', async () => {
   assert.equal(calls[2][0], 'update');
   assert.equal(calls[2][3], 'progress');
   assert.deepEqual(calls.at(-1), ['update', 'bot-1', '# 标题\n\n**最终完成**', 'final']);
+});
+
+test('BridgeFacade rejects image when image input is disabled', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+
+  const replies = [];
+  const config = createConfig(stateDir, workingDir);
+  config.bridge.imageEnabled = false;
+
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text) {
+      replies.push(text);
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'dingtalk',
+    userId: 'u1',
+    conversationType: '1',
+    messageId: 'm-image-disabled',
+    text: '',
+    images: [{ fileKey: 'download-code-1' }],
+    replyContext: { platform: 'dingtalk', sessionWebhook: 'https://example.com/hook', robotCode: 'ding_robot' },
+  });
+
+  assert.equal(replies.length, 1);
+  assert.match(replies[0], /未开启图片输入能力/u);
+});
+
+test('BridgeFacade converts image input into prompt text', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+
+  const replies = [];
+  const prompts = [];
+  const config = createConfig(stateDir, workingDir);
+
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text) {
+      replies.push(text);
+    },
+    async downloadImage() {
+      return {
+        buffer: Buffer.from('fake-image-data'),
+        mimeType: 'image/png',
+        sizeBytes: 15,
+      };
+    },
+  }, {
+    async *streamAgentTurnImpl(options) {
+      prompts.push(options.prompt);
+      yield { type: 'final_text', text: 'ok' };
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'dingtalk',
+    userId: 'u1',
+    conversationType: '1',
+    messageId: 'm-image-prompt',
+    text: '这张图讲了什么？',
+    images: [{ fileKey: 'download-code-1', mimeType: 'image/png' }],
+    replyContext: { platform: 'dingtalk', sessionWebhook: 'https://example.com/hook', robotCode: 'ding_robot' },
+  });
+
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /图片文件路径/u);
+  assert.match(prompts[0], /这张图讲了什么/u);
+  assert.deepEqual(replies, ['🤖 已收到，正在思考中…', 'ok']);
 });

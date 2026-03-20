@@ -8,8 +8,6 @@ export function emptyProviderSessionIds(): Record<AgentName, string | null> {
   return {
     claude: null,
     codex: null,
-    neovate: null,
-    opencode: null,
   };
 }
 
@@ -17,8 +15,6 @@ export function emptyProviderWorkingDirs(): Record<AgentName, string | null> {
   return {
     claude: null,
     codex: null,
-    neovate: null,
-    opencode: null,
   };
 }
 

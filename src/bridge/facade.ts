@@ -6,12 +6,18 @@ import { handleBridgePrompt } from './prompt.js';
 import type { RunState } from '../agent/types.js';
 import type { ReplyTextOptions } from '../client/message-format.js';
 import { splitMarkdownBlocks } from '../client/message-format.js';
-import type { ClientLike, IncomingMessage, PlatformReplyContext, SentMessageRef } from '../client/types.js';
+import type {
+  ClientLike,
+  IncomingImageAttachment,
+  IncomingMessage,
+  PlatformReplyContext,
+  SentMessageRef,
+} from '../client/types.js';
 import type { AppConfig } from '../config/types.js';
 import type { LoggerLike, PlatformKind } from '../shared/index.js';
 import type { StateStore } from '../storage/index.js';
 import type { SessionRecord } from '../storage/types.js';
-import { formatLogValue, sleep } from '../utils.js';
+import { formatLogValue, sleep, toErrorMessage } from '../utils.js';
 import type { AgentRunContext, BridgeContext, StreamAgentTurnImpl } from './types.js';
 
 function isSupportedConversationType(conversationType?: string): boolean {
@@ -53,6 +59,39 @@ function getMessageDedupeKey(incomingMessage: IncomingMessage): string {
     incomingMessage.conversationId || incomingMessage.userId || 'unknown',
     incomingMessage.messageId || 'unknown',
   ].join(':');
+}
+
+const SUPPORTED_IMAGE_MIME_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+]);
+
+function normalizeImageMimeType(mimeType?: string): string | null {
+  if (typeof mimeType !== 'string') {
+    return null;
+  }
+
+  const normalized = mimeType.split(';')[0].trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized === 'image/jpg' ? 'image/jpeg' : normalized;
+}
+
+function toImageExtension(mimeType: string): string {
+  if (mimeType === 'image/png') {
+    return 'png';
+  }
+  if (mimeType === 'image/webp') {
+    return 'webp';
+  }
+  if (mimeType === 'image/gif') {
+    return 'gif';
+  }
+  return 'jpg';
 }
 
 export { buildHelpText } from './commands.js';
@@ -204,6 +243,124 @@ export class BridgeFacade {
     await this.client.sendTyping(replyContext);
   }
 
+  getImageMaxBytes(): number {
+    return Math.floor(this.config.bridge.imageMaxMb * 1024 * 1024);
+  }
+
+  async rejectImageInput(incomingMessage: IncomingMessage, text: string): Promise<void> {
+    await this.replyText(incomingMessage.replyContext, text, {
+      messageId: incomingMessage.messageId,
+    });
+  }
+
+  async validateImageAttachment(
+    incomingMessage: IncomingMessage,
+    image: IncomingImageAttachment,
+    maxBytes: number,
+  ): Promise<string | null> {
+    if (!this.config.bridge.imageEnabled) {
+      await this.rejectImageInput(incomingMessage, '当前未开启图片输入能力。');
+      return null;
+    }
+
+    const mimeType = normalizeImageMimeType(image.mimeType || undefined);
+    if (mimeType && !SUPPORTED_IMAGE_MIME_TYPES.has(mimeType)) {
+      await this.rejectImageInput(
+        incomingMessage,
+        '图片格式不支持，仅允许 image/png、image/jpeg、image/webp、image/gif。',
+      );
+      return null;
+    }
+
+    if (typeof image.sizeBytes === 'number' && image.sizeBytes > maxBytes) {
+      await this.rejectImageInput(incomingMessage, `图片大小超过限制（${this.config.bridge.imageMaxMb}MB）。`);
+      return null;
+    }
+
+    return mimeType;
+  }
+
+  async buildImagePrompt(incomingMessage: IncomingMessage, session: SessionRecord, text: string): Promise<string | null> {
+    const images = Array.isArray(incomingMessage.images) ? incomingMessage.images : [];
+    if (images.length === 0) {
+      return text;
+    }
+
+    if (!this.config.bridge.imageEnabled) {
+      await this.rejectImageInput(incomingMessage, '当前未开启图片输入能力。');
+      return null;
+    }
+
+    if (images.length > 1) {
+      await this.rejectImageInput(incomingMessage, '单轮仅支持 1 张图片，请重新发送。');
+      return null;
+    }
+
+    if (typeof this.client.downloadImage !== 'function') {
+      await this.rejectImageInput(incomingMessage, '当前平台暂不支持图片输入。');
+      return null;
+    }
+
+    const image = images[0];
+    const maxBytes = this.getImageMaxBytes();
+    const hintedMime = await this.validateImageAttachment(incomingMessage, image, maxBytes);
+    if (!hintedMime && image.mimeType) {
+      return null;
+    }
+
+    let downloaded;
+    try {
+      downloaded = await this.client.downloadImage(incomingMessage, image, { maxBytes });
+    } catch (error) {
+      await this.rejectImageInput(incomingMessage, `图片下载失败：${toErrorMessage(error)}`);
+      return null;
+    }
+
+    const actualMime = normalizeImageMimeType(downloaded?.mimeType || hintedMime || undefined);
+    if (!actualMime || !SUPPORTED_IMAGE_MIME_TYPES.has(actualMime)) {
+      await this.rejectImageInput(
+        incomingMessage,
+        '图片格式不支持，仅允许 image/png、image/jpeg、image/webp、image/gif。',
+      );
+      return null;
+    }
+
+    const actualSize = downloaded?.sizeBytes || downloaded?.buffer?.length || 0;
+    if (actualSize > maxBytes) {
+      await this.rejectImageInput(incomingMessage, `图片大小超过限制（${this.config.bridge.imageMaxMb}MB）。`);
+      return null;
+    }
+
+    let filePath: string;
+    try {
+      const imageDir = path.join(this.getSessionWorkingDir(session), '.im-agent-bridge', 'images', session.id);
+      await fs.mkdir(imageDir, { recursive: true });
+
+      const baseName = incomingMessage.messageId || `img-${Date.now()}`;
+      const ext = toImageExtension(actualMime);
+      filePath = path.join(imageDir, `${baseName}-${Date.now()}.${ext}`);
+      await fs.writeFile(filePath, downloaded.buffer);
+    } catch (error) {
+      await this.rejectImageInput(incomingMessage, `图片保存失败：${toErrorMessage(error)}`);
+      return null;
+    }
+
+    const lines = [
+      '你将收到一张用户上传的图片，请先读取并理解图片内容，再回答用户问题。',
+      `图片文件路径：${filePath}`,
+      `图片类型：${actualMime}`,
+      `图片大小：${actualSize} bytes`,
+    ];
+
+    if (text) {
+      lines.push(`用户文本：${text}`);
+    } else {
+      lines.push('用户没有附加文本，请先描述图片，再给出关键信息。');
+    }
+
+    return lines.join('\n\n');
+  }
+
   async handleIncomingMessage(incomingMessage: IncomingMessage): Promise<void> {
     if (!incomingMessage?.userId) {
       return;
@@ -216,6 +373,7 @@ export class BridgeFacade {
       conversationType: incomingMessage.conversationType,
       userId: incomingMessage.userId,
       text: incomingMessage.text,
+      imageCount: incomingMessage.images?.length || 0,
     });
 
     if (!isAllowedUser(this.config, incomingMessage)) {
@@ -229,8 +387,11 @@ export class BridgeFacade {
       return;
     }
 
-    if (!incomingMessage.text) {
-      await this.replyText(incomingMessage.replyContext, '当前仅支持文本消息。', {
+    const inputText = String(incomingMessage.text || '').trim();
+    const imageCount = incomingMessage.images?.length || 0;
+
+    if (!inputText && imageCount === 0) {
+      await this.replyText(incomingMessage.replyContext, '当前仅支持文本和图片消息。', {
         messageId: incomingMessage.messageId,
       });
       return;
@@ -250,12 +411,17 @@ export class BridgeFacade {
       incomingMessage.platform,
     );
 
-    if (incomingMessage.text.startsWith('/')) {
-      await this.handleCommand(incomingMessage, session, incomingMessage.text);
+    if (imageCount === 0 && inputText.startsWith('/')) {
+      await this.handleCommand(incomingMessage, session, inputText);
       return;
     }
 
-    await this.handlePrompt(incomingMessage, session, incomingMessage.text);
+    const prompt = await this.buildImagePrompt(incomingMessage, session, inputText);
+    if (!prompt) {
+      return;
+    }
+
+    await this.handlePrompt(incomingMessage, session, prompt);
   }
 
   async handleCommand(incomingMessage: IncomingMessage, session: SessionRecord, text: string): Promise<void> {

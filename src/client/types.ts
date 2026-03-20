@@ -34,6 +34,24 @@ export interface SentMessageRef {
   chatId?: string | number;
 }
 
+export interface IncomingImageAttachment {
+  fileKey: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  fileName?: string;
+}
+
+export interface DownloadedImageFile {
+  buffer: Buffer;
+  mimeType?: string;
+  sizeBytes?: number;
+  fileName?: string;
+}
+
+export interface DownloadImageOptions {
+  maxBytes: number;
+}
+
 export interface IncomingMessage {
   platform: PlatformKind;
   userId: string;
@@ -43,6 +61,7 @@ export interface IncomingMessage {
   conversationType?: string;
   messageId?: string;
   text: string;
+  images?: IncomingImageAttachment[];
   replyContext: PlatformReplyContext;
   raw?: unknown;
 }
@@ -57,4 +76,9 @@ export interface ClientLike {
   replyText(replyContext: PlatformReplyContext, text: string, options?: ReplyTextOptions): Promise<SentMessageRef | null | void>;
   updateText?(replyContext: PlatformReplyContext, message: SentMessageRef, text: string, options?: ReplyTextOptions): Promise<void>;
   sendTyping?(replyContext: PlatformReplyContext): Promise<void>;
+  downloadImage?(
+    incomingMessage: IncomingMessage,
+    image: IncomingImageAttachment,
+    options: DownloadImageOptions,
+  ): Promise<DownloadedImageFile>;
 }

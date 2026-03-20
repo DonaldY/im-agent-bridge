@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { StateStore } from '../src/storage/index.js';
-import type { SessionRecord, ConversationLogEntry } from '../src/storage/types.js';
+import { StateStore } from '../src/storage';
+import type { SessionRecord, ConversationLogEntry } from '../src/storage/types';
 import type { MessageDedupeStoreLike, SessionRepositoryLike, ConversationLoggerLike } from '../src/storage.js';
 
 function createSession(id: string, userId = 'u1', activeAgent: SessionRecord['activeAgent'] = 'codex'): SessionRecord {
@@ -17,14 +17,10 @@ function createSession(id: string, userId = 'u1', activeAgent: SessionRecord['ac
     providerSessionIds: {
       claude: null,
       codex: null,
-      neovate: null,
-      opencode: null,
     },
     providerWorkingDirs: {
       claude: null,
       codex: null,
-      neovate: null,
-      opencode: null,
     },
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString(),

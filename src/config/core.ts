@@ -3,7 +3,7 @@ import type { AppConfig } from './types.js';
 import { expandHomePath, which } from '../utils.js';
 
 export const DEFAULT_PLATFORM_KIND: PlatformKind = 'dingtalk';
-export const VALID_AGENTS: AgentName[] = ['claude', 'codex', 'neovate', 'opencode'];
+export const VALID_AGENTS: AgentName[] = ['claude', 'codex'];
 export const VALID_PLATFORMS: PlatformKind[] = ['dingtalk', 'feishu', 'telegram'];
 export const VALID_TELEGRAM_MODES: TelegramMode[] = ['poll', 'webhook'];
 

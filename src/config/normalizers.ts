@@ -174,6 +174,8 @@ export function normalizeConfig({ configPath, parsed }: NormalizedConfigInputs):
   const replyChunkChars = Number(bridge.reply_chunk_chars ?? 1500);
   const dedupeTtlMs = Number(bridge.dedupe_ttl_ms ?? 600000);
   const replyMode = (bridge.reply_mode ?? 'stream') as 'final_only' | 'stream';
+  const imageEnabled = typeof bridge.image_enabled === 'boolean' ? bridge.image_enabled : true;
+  const imageMaxMb = Number(bridge.image_max_mb ?? 20);
   const debugFromEnv = parseBooleanFlag(process.env.IAB_DEBUG);
   const isDevLifecycle = process.env.npm_lifecycle_event === 'dev';
   const debug = debugFromEnv
@@ -188,6 +190,9 @@ export function normalizeConfig({ configPath, parsed }: NormalizedConfigInputs):
   }
   if (!['final_only', 'stream'].includes(replyMode)) {
     throw new Error('bridge.reply_mode must be one of: final_only, stream');
+  }
+  if (!Number.isFinite(imageMaxMb) || imageMaxMb <= 0) {
+    throw new Error('bridge.image_max_mb must be a positive number');
   }
 
   return {
@@ -204,14 +209,14 @@ export function normalizeConfig({ configPath, parsed }: NormalizedConfigInputs):
       replyChunkChars,
       replyMode,
       dedupeTtlMs,
+      imageEnabled,
+      imageMaxMb,
     },
     network: normalizeNetworkConfig(network),
     agents: {
       enabled: enabledAgents as AgentName[],
       claude: normalizeAgentConfig(agents.claude, 'agents.claude', 'claude'),
       codex: normalizeAgentConfig(agents.codex, 'agents.codex', 'codex'),
-      neovate: normalizeAgentConfig(agents.neovate, 'agents.neovate', 'neovate'),
-      opencode: normalizeAgentConfig(agents.opencode, 'agents.opencode', 'opencode'),
     },
   };
 }

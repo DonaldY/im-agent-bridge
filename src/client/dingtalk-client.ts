@@ -3,7 +3,13 @@ import type { LoggerLike } from '../shared/index.js';
 import type { DingTalkConfig } from '../config/types.js';
 import { renderReply } from './message-format.js';
 import type { ReplyTextOptions } from './message-format.js';
-import type { DingTalkReplyContext, IncomingMessage } from './types.js';
+import type {
+  DingTalkReplyContext,
+  DownloadImageOptions,
+  DownloadedImageFile,
+  IncomingImageAttachment,
+  IncomingMessage,
+} from './types.js';
 import { BaseClient } from './base-client.js';
 import { formatLogValue, toErrorMessage, toUtf8String } from '../utils.js';
 
@@ -36,6 +42,30 @@ interface DingTalkRobotPayload {
   msgId?: string;
   msgtype?: string;
   text?: { content?: string };
+  content?: string;
+}
+
+interface DingTalkMessageContent {
+  downloadCode?: string;
+  pictureDownloadCode?: string;
+  richText?: Array<{
+    type?: string;
+    downloadCode?: string;
+    pictureDownloadCode?: string;
+  }>;
+}
+
+interface DingTalkMessageFileResponse {
+  downloadUrl?: string;
+  download_url?: string;
+  errmsg?: string;
+  message?: string;
+}
+
+interface DingTalkAccessTokenResponse {
+  access_token?: string;
+  expires_in?: number;
+  errmsg?: string;
 }
 
 interface DingTalkEnvelope {
@@ -49,6 +79,60 @@ function extractTextContent(payload: DingTalkRobotPayload): string {
     return '';
   }
   return typeof payload.text?.content === 'string' ? payload.text.content.trim() : '';
+}
+
+function parseMessageContent(payload: DingTalkRobotPayload): DingTalkMessageContent {
+  if (typeof payload?.content !== 'string' || !payload.content.trim()) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(payload.content) as DingTalkMessageContent;
+  } catch {
+    return {};
+  }
+}
+
+function extractImageAttachments(payload: DingTalkRobotPayload): IncomingImageAttachment[] {
+  const content = parseMessageContent(payload);
+  const keys: string[] = [];
+
+  if (payload?.msgtype === 'picture') {
+    const key = content.pictureDownloadCode || content.downloadCode;
+    if (key) {
+      keys.push(key);
+    }
+  }
+
+  if (payload?.msgtype === 'richText' && Array.isArray(content.richText)) {
+    for (const item of content.richText) {
+      if (item?.type !== 'picture') {
+        continue;
+      }
+      const key = item.pictureDownloadCode || item.downloadCode;
+      if (key) {
+        keys.push(key);
+      }
+    }
+  }
+
+  return [...new Set(keys)]
+    .map((fileKey) => fileKey.trim())
+    .filter(Boolean)
+    .map((fileKey) => ({ fileKey }));
+}
+
+function normalizeMimeType(value?: string): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.split(';')[0].trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized === 'image/jpg' ? 'image/jpeg' : normalized;
 }
 
 function parseEnvelopeData(data: unknown): DingTalkEnvelope | null {
@@ -115,6 +199,7 @@ export function normalizeRobotMessage(eventEnvelope: DingTalkEnvelope): Incoming
     conversationType: payload.conversationType,
     messageId: payload.msgId || eventEnvelope.headers?.messageId,
     text: extractTextContent(payload),
+    images: extractImageAttachments(payload),
     replyContext: {
       platform: 'dingtalk',
       sessionWebhook: payload.sessionWebhook || '',
@@ -130,12 +215,16 @@ export class DingTalkClient extends BaseClient<DingTalkConfig> {
   private fetchImpl: typeof fetch;
   private clientFactory?: (config: DingTalkConfig) => any;
   private client: any;
+  private accessToken: string | null;
+  private accessTokenExpiredAt: number;
 
   constructor(config: DingTalkConfig, options: DingTalkClientOptions = {}) {
     super(config, options);
     this.fetchImpl = options.fetchImpl || globalThis.fetch;
     this.clientFactory = options.clientFactory;
     this.client = null;
+    this.accessToken = null;
+    this.accessTokenExpiredAt = 0;
   }
 
   protected override logDebug(message: string, payload?: unknown): void {
@@ -256,6 +345,89 @@ export class DingTalkClient extends BaseClient<DingTalkConfig> {
     if (this.client && typeof this.client.disconnect === 'function') {
       this.client.disconnect();
     }
+  }
+
+  async fetchAccessToken(): Promise<string> {
+    if (this.accessToken && Date.now() < this.accessTokenExpiredAt - 60_000) {
+      return this.accessToken;
+    }
+
+    const url = `https://oapi.dingtalk.com/gettoken?appkey=${encodeURIComponent(this.config.clientId)}&appsecret=${encodeURIComponent(this.config.clientSecret)}`;
+    const response = await this.fetchImpl(url, { headers: { accept: 'application/json' } });
+    if (!response.ok) {
+      throw new Error(`DingTalk gettoken failed with status ${response.status}`);
+    }
+
+    const result = await response.json() as DingTalkAccessTokenResponse;
+    if (!result?.access_token) {
+      throw new Error(result?.errmsg || 'missing dingtalk access_token');
+    }
+
+    this.accessToken = result.access_token;
+    this.accessTokenExpiredAt = Date.now() + Number(result.expires_in || 7200) * 1000;
+    return this.accessToken;
+  }
+
+  async downloadImage(
+    incomingMessage: IncomingMessage,
+    image: IncomingImageAttachment,
+    options: DownloadImageOptions,
+  ): Promise<DownloadedImageFile> {
+    if (!image?.fileKey) {
+      throw new Error('fileKey is required for DingTalk image download');
+    }
+
+    const replyContext = incomingMessage.replyContext as DingTalkReplyContext;
+    const robotCode = replyContext?.robotCode || this.config.robotCode;
+    if (!robotCode) {
+      throw new Error('robotCode is required for DingTalk image download');
+    }
+
+    const accessToken = await this.fetchAccessToken();
+    const downloadResponse = await this.fetchImpl('https://api.dingtalk.com/v1.0/robot/messageFiles/download', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'x-acs-dingtalk-access-token': accessToken,
+      },
+      body: JSON.stringify({
+        downloadCode: image.fileKey,
+        robotCode,
+      }),
+    });
+
+    if (!downloadResponse.ok) {
+      throw new Error(`DingTalk messageFiles.download failed with status ${downloadResponse.status}`);
+    }
+
+    const downloadResult = await downloadResponse.json() as DingTalkMessageFileResponse;
+    const downloadUrl = downloadResult.downloadUrl || downloadResult.download_url;
+    if (!downloadUrl) {
+      throw new Error(downloadResult.errmsg || downloadResult.message || 'missing DingTalk image downloadUrl');
+    }
+
+    const fileResponse = await this.fetchImpl(downloadUrl, { headers: { accept: '*/*' } });
+    if (!fileResponse.ok) {
+      throw new Error(`DingTalk image download failed with status ${fileResponse.status}`);
+    }
+
+    const contentLength = Number(fileResponse.headers.get('content-length') || 0);
+    if (Number.isFinite(contentLength) && contentLength > options.maxBytes) {
+      throw new Error(`image size exceeds limit ${options.maxBytes} bytes`);
+    }
+
+    const buffer = Buffer.from(await fileResponse.arrayBuffer());
+    if (buffer.length > options.maxBytes) {
+      throw new Error(`image size exceeds limit ${options.maxBytes} bytes`);
+    }
+
+    return {
+      buffer,
+      sizeBytes: contentLength > 0 ? contentLength : buffer.length,
+      mimeType: normalizeMimeType(fileResponse.headers.get('content-type') || undefined) || image.mimeType,
+      fileName: image.fileName,
+    };
   }
 
   async replyText(replyContext: DingTalkReplyContext, text: string, options: ReplyTextOptions = {}): Promise<void> {

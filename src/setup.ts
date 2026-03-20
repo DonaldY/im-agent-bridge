@@ -45,7 +45,7 @@ proxy_url = ""
 no_proxy = ""
 
 [agents]
-enabled = ["codex", "claude", "neovate", "opencode"]
+enabled = ["codex", "claude"]
 
 [agents.codex]
 bin = "codex"
@@ -54,16 +54,6 @@ extra_args = []
 
 [agents.claude]
 bin = "claude"
-model = ""
-extra_args = []
-
-[agents.neovate]
-bin = "neovate"
-model = ""
-extra_args = []
-
-[agents.opencode]
-bin = "opencode"
 model = ""
 extra_args = []
 `;

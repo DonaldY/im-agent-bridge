@@ -60,6 +60,10 @@ function formatAgentOptions(agents: string[]): string {
 }
 
 export function buildHelpText(config: AppConfig): string {
+  const imageSupportText = config.bridge.imageEnabled
+    ? `• 当前支持飞书/钉钉单图输入（格式：image/png、image/jpeg、image/webp、image/gif；大小：${config.bridge.imageMaxMb}MB）`
+    : '• 当前已关闭图片输入，仅支持文本消息';
+
   return [
     '📚 支持命令',
     '• `/help` 查看帮助',
@@ -69,7 +73,8 @@ export function buildHelpText(config: AppConfig): string {
     '• `/status` 查看当前会话状态',
     '• `/interrupt` 中断当前处理中任务',
     'ℹ️ 说明',
-    '• 当前仅支持单聊文本消息',
+    imageSupportText,
+    '• 单轮最多 1 张图片，超限会直接拒绝',
     `• 当前回复模式：\`${config.bridge.replyMode}\``,
     '• 其他文本会直接转发给当前 agent',
   ].join('\n\n');

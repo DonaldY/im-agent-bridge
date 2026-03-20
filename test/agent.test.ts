@@ -1,12 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAgentCommandSpec } from '../src/agent/index.js';
+import { buildAgentCommandSpec } from '../src/agent';
 import {
   parseClaudeLine,
   parseCodexLine,
-  parseNeovateLine,
-  parseOpencodeLine,
-} from '../src/agent/internal.js';
+} from '../src/agent/internal';
 
 test('parseClaudeLine handles stream-json output', () => {
   const state = {};
@@ -34,39 +32,11 @@ test('parseCodexLine handles jsonl output', () => {
   );
 });
 
-test('parseNeovateLine handles result output', () => {
-  const state = {};
-  assert.deepEqual(
-    parseNeovateLine('{"type":"system","subtype":"init","sessionId":"n1"}', state),
-    [{ type: 'session_started', sessionId: 'n1' }],
-  );
-
-  assert.deepEqual(
-    parseNeovateLine('{"type":"result","subtype":"success","content":"Done"}', state),
-    [{ type: 'final_text', text: 'Done' }],
-  );
-});
-
-test('parseOpencodeLine handles text aggregation', () => {
-  const state = {};
-  assert.deepEqual(
-    parseOpencodeLine('{"type":"step_start","sessionID":"o1"}', state),
-    [{ type: 'session_started', sessionId: 'o1' }],
-  );
-
-  assert.deepEqual(
-    parseOpencodeLine('{"type":"text","part":{"type":"text","text":"Hi"}}', state),
-    [{ type: 'partial_text', text: 'Hi' }],
-  );
-});
-
 test('buildAgentCommandSpec uses configured binaries and flags', () => {
   const config = {
     agents: {
       claude: { bin: '/bin/claude', model: 'model-a', extraArgs: ['--foo'] },
       codex: { bin: '/bin/codex', model: 'model-b', extraArgs: ['--bar'] },
-      neovate: { bin: '/bin/neovate', model: 'model-c', extraArgs: ['--baz'] },
-      opencode: { bin: '/bin/opencode', model: 'model-d', extraArgs: ['--qux'] },
     },
   };
 
@@ -76,10 +46,4 @@ test('buildAgentCommandSpec uses configured binaries and flags', () => {
 
   const codex = buildAgentCommandSpec(config, 'codex', 'prompt', '/tmp/work', 'session-2');
   assert.deepEqual(codex.args.slice(0, 5), ['exec', 'resume', 'session-2', '--json', '--full-auto']);
-
-  const neovate = buildAgentCommandSpec(config, 'neovate', 'prompt', '/tmp/work', null);
-  assert.equal(neovate.args.includes('--cwd'), true);
-
-  const opencode = buildAgentCommandSpec(config, 'opencode', 'prompt', '/tmp/work', 'session-3');
-  assert.equal(opencode.args.includes('--session'), true);
 });
