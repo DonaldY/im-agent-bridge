@@ -1,6 +1,6 @@
 # im-agent-bridge
 
-[简体中文](./README.zh-CN.md) | [English](./README)
+[简体中文](./README.zh-CN.md) | [English](./README.en.md)
 
 A TypeScript service that bridges `DingTalk` / `Feishu` / `Telegram` messages to local AI CLIs (such as `codex` and `claude`).
 
@@ -54,11 +54,54 @@ im-agent-bridge setup
 # 2) Run local checks
 im-agent-bridge doctor
 
-# 3) Start service
+# 3) Start service in foreground
 im-agent-bridge serve
+
+# 4) Start background service (macOS, first run installs + starts)
+im-agent-bridge service install --config ~/.im-agent-bridge/config.toml
 ```
 
 When you see `[serve] <platform> client connected`, the platform connection is ready.
+
+`im-agent-bridge serve` runs in foreground and occupies the current terminal (`Ctrl + C` to stop).
+
+## Run in Background
+
+### macOS (built-in `launchd` support)
+
+```bash
+# global install usage (recommended)
+# first time: install and start background service
+im-agent-bridge service install --config ~/.im-agent-bridge/config.toml
+
+# later runs: start already installed background service
+im-agent-bridge service start
+
+# check status / logs
+im-agent-bridge service status
+im-agent-bridge service logs --lines 120
+
+# run from source (build first)
+npm run build
+# first time: install and start background service
+node dist/cli.js service install --config ~/.im-agent-bridge/config.toml
+
+# later runs: start already installed background service
+node dist/cli.js service start
+
+# check status / logs
+node dist/cli.js service status
+node dist/cli.js service logs --lines 120
+```
+
+### Linux / other Unix-like environments (manual background run)
+
+```bash
+nohup im-agent-bridge serve --config ~/.im-agent-bridge/config.toml \
+  > ~/.im-agent-bridge/serve.log 2>&1 &
+```
+
+For long-running production deployments on Linux, prefer `systemd` or `pm2`.
 
 ## Configuration
 
@@ -93,6 +136,7 @@ Extra flags for `service`:
 - `--label <value>`: custom `launchd` label
 - `--keepawake none|idle|system|on_ac`: only for `service install`
 - `--lines <number>`: only for `service logs`
+- Note: `service` subcommands are only supported on macOS.
 
 ## Chat Commands
 

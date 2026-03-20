@@ -1,6 +1,6 @@
 # im-agent-bridge
 
-[简体中文](./README.zh-CN.md) | [English](./README)
+[简体中文](./README.zh-CN.md) | [English](./README.en.md)
 
 将 `DingTalk` / `Feishu` / `Telegram` 的消息桥接到本地 AI CLI（如 `codex`、`claude`）的 TypeScript 服务。
 
@@ -54,11 +54,54 @@ im-agent-bridge setup
 # 2) 本地检查
 im-agent-bridge doctor
 
-# 3) 启动服务
+# 3) 前台启动服务
 im-agent-bridge serve
+
+# 4) 后台启动服务（macOS，首次会自动安装并启动）
+im-agent-bridge service install --config ~/.im-agent-bridge/config.toml
 ```
 
 当看到日志 `[serve] <platform> client connected` 时，表示平台连接成功。
+
+`im-agent-bridge serve` 为前台运行，会占用当前终端（`Ctrl + C` 停止）。
+
+## 后台运行
+
+### macOS（内置 `launchd` 托管）
+
+```bash
+# 全局安装场景（推荐）
+# 首次：安装并启动后台服务
+im-agent-bridge service install --config ~/.im-agent-bridge/config.toml
+
+# 后续：仅启动已安装的后台服务
+im-agent-bridge service start
+
+# 查看状态 / 日志
+im-agent-bridge service status
+im-agent-bridge service logs --lines 120
+
+# 源码运行场景（需要先构建）
+npm run build
+# 首次：安装并启动后台服务
+node dist/cli.js service install --config ~/.im-agent-bridge/config.toml
+
+# 后续：仅启动已安装的后台服务
+node dist/cli.js service start
+
+# 查看状态 / 日志
+node dist/cli.js service status
+node dist/cli.js service logs --lines 120
+```
+
+### Linux / 其他类 Unix 环境（手动后台运行）
+
+```bash
+nohup im-agent-bridge serve --config ~/.im-agent-bridge/config.toml \
+  > ~/.im-agent-bridge/serve.log 2>&1 &
+```
+
+Linux 生产部署建议优先使用 `systemd` 或 `pm2`。
 
 ## Configuration
 
@@ -93,6 +136,7 @@ im-agent-bridge service [install|start|stop|restart|status|logs|uninstall]
 - `--label <value>`：自定义 `launchd` label
 - `--keepawake none|idle|system|on_ac`：仅 `service install` 可用
 - `--lines <number>`：仅 `service logs` 可用
+- 注意：`service` 子命令仅支持 macOS。
 
 ## Chat Commands
 
