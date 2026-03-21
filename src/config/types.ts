@@ -4,6 +4,7 @@ export interface AgentConfig {
   bin: string;
   model?: string;
   extraArgs: string[];
+  env: Record<string, string>;
 }
 
 export interface NetworkConfig {

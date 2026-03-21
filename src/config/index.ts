@@ -10,6 +10,7 @@ export {
   normalizeWebhookPath,
   validatePlatformConfig,
   resolveAgentBinary,
+  resolveAgentEnvironment,
   applyRuntimeEnvironment,
 } from './core.js';
 export {

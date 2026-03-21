@@ -1,6 +1,6 @@
 # im-agent-bridge
 
-[简体中文](./README.zh-CN.md) | [English](./README.en.md)
+[简体中文](./README.zh-CN.md) | [English](./README)
 
 A TypeScript service that bridges `DingTalk` / `Feishu` / `Telegram` messages to local AI CLIs (such as `codex` and `claude`).
 
@@ -113,6 +113,7 @@ Use `config.example.toml` as reference. Minimum required fields:
 - `bridge.default_agent`: default agent
 - `bridge.working_dir`: default working directory
 - `agents.<name>.bin`: local executable path or command name
+- `agents.<name>.<ENV_NAME>`: add environment variables directly under the agent section, useful for `HOME`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.
 
 Common optional fields:
 
@@ -137,6 +138,9 @@ Extra flags for `service`:
 - `--keepawake none|idle|system|on_ac`: only for `service install`
 - `--lines <number>`: only for `service logs`
 - Note: `service` subcommands are only supported on macOS.
+- Note: `launchd` does not inherit environment variables from your interactive shell.
+- If `codex` / `claude` works in foreground but fails in background, add the required environment variables directly under `[agents.codex]` and `[agents.claude]`.
+- A common setup is to provide `HOME` so the agent can read `~/.codex` / `~/.config`, plus runtime secrets such as `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
 
 ## Chat Commands
 

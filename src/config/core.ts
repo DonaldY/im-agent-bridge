@@ -72,6 +72,13 @@ export function resolveAgentBinary(config: AppConfig, agent: AgentName): string 
   return which(agent);
 }
 
+export function resolveAgentEnvironment(config: AppConfig, agent: AgentName): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    ...config.agents[agent].env,
+  };
+}
+
 export function applyRuntimeEnvironment(config: AppConfig): void {
   if (config.network?.proxyUrl) {
     process.env.HTTP_PROXY = config.network.proxyUrl;

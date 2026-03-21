@@ -19,6 +19,40 @@ import {
   normalizeWebhookPath,
 } from './core.js';
 
+function normalizeAgentEnvEntries(entries: Array<[string, unknown]>, label: string): Record<string, string> {
+  const normalized: Array<[string, string]> = [];
+
+  for (const [key, entry] of entries) {
+    if (typeof entry === 'string') {
+      if (!entry.trim()) {
+        continue;
+      }
+      normalized.push([key, entry]);
+      continue;
+    }
+
+    if (typeof entry === 'number' || typeof entry === 'boolean') {
+      normalized.push([key, String(entry)]);
+      continue;
+    }
+
+    throw new Error(`${label}.${key} must be a string, number, or boolean`);
+  }
+
+  return Object.fromEntries(normalized);
+}
+
+function normalizeAgentEnv(raw: Record<string, unknown>, label: string): Record<string, string> {
+  const value = asRecord(raw.env);
+  const directEntries = Object.entries(raw).filter(([key]) => !['bin', 'model', 'extra_args', 'env'].includes(key));
+  const nestedEntries = Object.entries(value);
+
+  return {
+    ...normalizeAgentEnvEntries(nestedEntries, `${label}.env`),
+    ...normalizeAgentEnvEntries(directEntries, label),
+  };
+}
+
 export function normalizeAgentConfig(raw: unknown, label: string, fallbackBin: string): AgentConfig {
   const value = asRecord(raw);
   const extraArgs = value.extra_args ?? [];
@@ -36,6 +70,7 @@ export function normalizeAgentConfig(raw: unknown, label: string, fallbackBin: s
       }
       return entry;
     }),
+    env: normalizeAgentEnv(value, label),
   };
 }
 

@@ -1,6 +1,6 @@
 # im-agent-bridge
 
-[简体中文](./README.zh-CN.md) | [English](./README.en.md)
+[简体中文](./README.zh-CN.md) | [English](./README)
 
 将 `DingTalk` / `Feishu` / `Telegram` 的消息桥接到本地 AI CLI（如 `codex`、`claude`）的 TypeScript 服务。
 
@@ -113,6 +113,7 @@ Linux 生产部署建议优先使用 `systemd` 或 `pm2`。
 - `bridge.default_agent`：默认 agent
 - `bridge.working_dir`：默认工作目录
 - `agents.<name>.bin`：本机可执行 CLI 路径或命令名
+- `agents.<name>.<ENV_NAME>`：直接在 agent 段下追加环境变量，适合配置 `HOME`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`
 
 可选常用项：
 
@@ -137,6 +138,9 @@ im-agent-bridge service [install|start|stop|restart|status|logs|uninstall]
 - `--keepawake none|idle|system|on_ac`：仅 `service install` 可用
 - `--lines <number>`：仅 `service logs` 可用
 - 注意：`service` 子命令仅支持 macOS。
+- 注意：`launchd` 不会继承你当前终端里的 shell 环境变量。
+- 如果 `codex` / `claude` 前台可用、后台缺少凭证，请直接在 `[agents.codex]`、`[agents.claude]` 下追加对应环境变量。
+- 常见写法是通过 `HOME` 让 agent 读取 `~/.codex` / `~/.config`，再通过 `OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 等传入运行时凭证。
 
 ## Chat Commands
 

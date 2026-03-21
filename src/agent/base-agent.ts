@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { resolveAgentBinary } from '../config/index.js';
+import { resolveAgentBinary, resolveAgentEnvironment } from '../config/index.js';
 import type { AgentName } from '../shared/index.js';
 import type { AgentConfig, AppConfig } from '../config/types.js';
 import type { AgentEvent, AgentProviderLike, AgentStreamOptions, BuildArgsOptions, CommandSpec, ParserState } from './types.js';
@@ -51,7 +51,7 @@ export abstract class BaseAgent implements AgentProviderLike {
     const [spawnCommand, spawnArgs] = normalizeSpawn(spec.command, spec.args);
     const child = spawn(spawnCommand, spawnArgs, {
       cwd: spec.cwd,
-      env: process.env,
+      env: resolveAgentEnvironment(this.config, this.name),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let aborted = Boolean(abortSignal?.aborted);

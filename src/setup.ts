@@ -51,11 +51,18 @@ enabled = ["codex", "claude"]
 bin = "codex"
 model = ""
 extra_args = []
+# For launchd/background mode, set runtime env explicitly.
+# Example:
+# HOME = "/Users/yourname"
+# OPENAI_API_KEY = "sk-..."
 
 [agents.claude]
 bin = "claude"
 model = ""
 extra_args = []
+# Example:
+# HOME = "/Users/yourname"
+# ANTHROPIC_API_KEY = "sk-ant-..."
 `;
 
 function exampleConfigPath(): string {

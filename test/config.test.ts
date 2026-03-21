@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { loadConfig } from '../src/config/index.js';
+import { loadConfig, resolveAgentEnvironment } from '../src/config/index.js';
 
 test('loadConfig reads dingtalk config', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));
@@ -36,6 +36,172 @@ enabled = ["codex", "claude"]
   assert.equal(config.bridge.imageEnabled, true);
   assert.equal(config.bridge.imageMaxMb, 20);
   assert.deepEqual(config.agents.enabled, ['codex', 'claude']);
+  assert.deepEqual(config.agents.codex.env, {});
+});
+
+test('loadConfig reads per-agent env for codex and claude', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));
+  const configPath = path.join(tempDir, 'config.toml');
+
+  await fs.writeFile(configPath, `
+[platform]
+kind = "dingtalk"
+
+[dingtalk]
+client_id = "cid"
+client_secret = "secret"
+
+[bridge]
+default_agent = "codex"
+working_dir = "${tempDir}"
+
+[agents]
+enabled = ["codex", "claude"]
+
+[agents.codex]
+bin = "codex"
+HOME = "/Users/demo"
+OPENAI_API_KEY = "sk-demo"
+
+[agents.claude]
+bin = "claude"
+HOME = "/Users/demo"
+ANTHROPIC_API_KEY = "ak-demo"
+USE_BEDROCK = true
+MAX_TURNS = 3
+`, 'utf8');
+
+  const config = await loadConfig(configPath);
+
+  assert.deepEqual(config.agents.codex.env, {
+    HOME: '/Users/demo',
+    OPENAI_API_KEY: 'sk-demo',
+  });
+  assert.deepEqual(config.agents.claude.env, {
+    HOME: '/Users/demo',
+    ANTHROPIC_API_KEY: 'ak-demo',
+    USE_BEDROCK: 'true',
+    MAX_TURNS: '3',
+  });
+});
+
+test('loadConfig rejects unsupported agent env values', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));
+  const configPath = path.join(tempDir, 'config.toml');
+
+  await fs.writeFile(configPath, `
+[platform]
+kind = "dingtalk"
+
+[dingtalk]
+client_id = "cid"
+client_secret = "secret"
+
+[bridge]
+default_agent = "codex"
+working_dir = "${tempDir}"
+
+[agents]
+enabled = ["codex"]
+
+[agents.codex]
+BAD = ["oops"]
+`, 'utf8');
+
+  await assert.rejects(() => loadConfig(configPath), /agents.codex.BAD must be a string, number, or boolean/u);
+});
+
+test('resolveAgentEnvironment merges process env with agent env', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));
+  const configPath = path.join(tempDir, 'config.toml');
+
+  await fs.writeFile(configPath, `
+[platform]
+kind = "dingtalk"
+
+[dingtalk]
+client_id = "cid"
+client_secret = "secret"
+
+[bridge]
+default_agent = "codex"
+working_dir = "${tempDir}"
+
+[agents]
+enabled = ["codex"]
+
+[agents.codex]
+OPENAI_API_KEY = "sk-config"
+HOME = "/Users/demo"
+`, 'utf8');
+
+  const previousPath = process.env.PATH;
+  process.env.PATH = '/usr/bin:/bin';
+
+  try {
+    const config = await loadConfig(configPath);
+    const env = resolveAgentEnvironment(config, 'codex');
+
+    assert.equal(env.PATH, '/usr/bin:/bin');
+    assert.equal(env.HOME, '/Users/demo');
+    assert.equal(env.OPENAI_API_KEY, 'sk-config');
+  } finally {
+    if (previousPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = previousPath;
+    }
+  }
+});
+
+test('resolveAgentEnvironment ignores empty agent env strings and falls back to process env', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-config-'));
+  const configPath = path.join(tempDir, 'config.toml');
+
+  await fs.writeFile(configPath, `
+[platform]
+kind = "dingtalk"
+
+[dingtalk]
+client_id = "cid"
+client_secret = "secret"
+
+[bridge]
+default_agent = "codex"
+working_dir = "${tempDir}"
+
+[agents]
+enabled = ["codex"]
+
+[agents.codex]
+OPENAI_API_KEY = ""
+HOME = "   "
+`, 'utf8');
+
+  const previousHome = process.env.HOME;
+  const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
+  process.env.HOME = '/Users/system-home';
+  process.env.OPENAI_API_KEY = 'sk-from-shell';
+
+  try {
+    const config = await loadConfig(configPath);
+    const env = resolveAgentEnvironment(config, 'codex');
+
+    assert.equal(env.HOME, '/Users/system-home');
+    assert.equal(env.OPENAI_API_KEY, 'sk-from-shell');
+  } finally {
+    if (previousHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = previousHome;
+    }
+
+    if (previousOpenAiApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = previousOpenAiApiKey;
+    }
+  }
 });
 
 test('loadConfig reads bridge image config', async () => {
