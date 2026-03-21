@@ -1,6 +1,6 @@
 # im-agent-bridge
 
-[简体中文](./README.zh-CN.md) | [English](./README)
+[简体中文](./README.zh-CN.md) | [English](./README.en.md)
 
 将 `DingTalk` / `Feishu` / `Telegram` 的消息桥接到本地 AI CLI（如 `codex`、`claude`）的 TypeScript 服务。
 
@@ -113,7 +113,7 @@ Linux 生产部署建议优先使用 `systemd` 或 `pm2`。
 - `bridge.default_agent`：默认 agent
 - `bridge.working_dir`：默认工作目录
 - `agents.<name>.bin`：本机可执行 CLI 路径或命令名
-- `agents.<name>.<ENV_NAME>`：直接在 agent 段下追加环境变量，适合配置 `HOME`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`
+- `agents.<name>.<ENV_NAME>`：直接在 agent 段下追加环境变量，适合配置 `CODEX_HOME`、`OPENAI_API_KEY`、`CLAUDE_CONFIG_DIR`、`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`
 
 可选常用项：
 
@@ -140,7 +140,23 @@ im-agent-bridge service [install|start|stop|restart|status|logs|uninstall]
 - 注意：`service` 子命令仅支持 macOS。
 - 注意：`launchd` 不会继承你当前终端里的 shell 环境变量。
 - 如果 `codex` / `claude` 前台可用、后台缺少凭证，请直接在 `[agents.codex]`、`[agents.claude]` 下追加对应环境变量。
-- 常见写法是通过 `HOME` 让 agent 读取 `~/.codex` / `~/.config`，再通过 `OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 等传入运行时凭证。
+- 推荐显式指定各自的配置目录与网关变量，不要只依赖 shell 里的 `export`。
+- `codex` 后台模式建议至少配置：`CODEX_HOME`、`OPENAI_API_KEY`
+- `claude` 后台模式建议至少配置：`CLAUDE_CONFIG_DIR`、`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`
+- 不建议把 `HOME` 写成 `~/.codex` 或 `~/.claude`；否则 CLI 会找错配置目录。
+
+```toml
+[agents.codex]
+bin = "codex"
+CODEX_HOME = "/Users/yourname/.codex"
+OPENAI_API_KEY = "sk-..."
+
+[agents.claude]
+bin = "claude"
+CLAUDE_CONFIG_DIR = "/Users/yourname/.claude"
+ANTHROPIC_BASE_URL = "https://api-ai-cn.pingpongx.com"
+ANTHROPIC_AUTH_TOKEN = "sk-..."
+```
 
 ## Chat Commands
 

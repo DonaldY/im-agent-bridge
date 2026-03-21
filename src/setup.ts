@@ -53,7 +53,7 @@ model = ""
 extra_args = []
 # For launchd/background mode, set runtime env explicitly.
 # Example:
-# HOME = "/Users/yourname"
+# CODEX_HOME = "/Users/yourname/.codex"
 # OPENAI_API_KEY = "sk-..."
 
 [agents.claude]
@@ -61,8 +61,9 @@ bin = "claude"
 model = ""
 extra_args = []
 # Example:
-# HOME = "/Users/yourname"
-# ANTHROPIC_API_KEY = "sk-ant-..."
+# CLAUDE_CONFIG_DIR = "/Users/yourname/.claude"
+# ANTHROPIC_BASE_URL = "https://api-ai-cn.pingpongx.com"
+# ANTHROPIC_AUTH_TOKEN = "sk-ant-..."
 `;
 
 function exampleConfigPath(): string {

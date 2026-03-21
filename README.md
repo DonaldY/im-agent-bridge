@@ -1,6 +1,6 @@
 # im-agent-bridge
 
-[简体中文](./README.zh-CN.md) | [English](./README)
+[简体中文](./README.zh-CN.md) | [English](./README.en.md)
 
 A TypeScript service that bridges `DingTalk` / `Feishu` / `Telegram` messages to local AI CLIs (such as `codex` and `claude`).
 
@@ -113,7 +113,7 @@ Use `config.example.toml` as reference. Minimum required fields:
 - `bridge.default_agent`: default agent
 - `bridge.working_dir`: default working directory
 - `agents.<name>.bin`: local executable path or command name
-- `agents.<name>.<ENV_NAME>`: add environment variables directly under the agent section, useful for `HOME`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.
+- `agents.<name>.<ENV_NAME>`: add environment variables directly under the agent section, useful for `CODEX_HOME`, `OPENAI_API_KEY`, `CLAUDE_CONFIG_DIR`, `ANTHROPIC_BASE_URL`, and `ANTHROPIC_AUTH_TOKEN`.
 
 Common optional fields:
 
@@ -140,7 +140,23 @@ Extra flags for `service`:
 - Note: `service` subcommands are only supported on macOS.
 - Note: `launchd` does not inherit environment variables from your interactive shell.
 - If `codex` / `claude` works in foreground but fails in background, add the required environment variables directly under `[agents.codex]` and `[agents.claude]`.
-- A common setup is to provide `HOME` so the agent can read `~/.codex` / `~/.config`, plus runtime secrets such as `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
+- Prefer setting each CLI's config directory and gateway variables explicitly instead of relying on shell `export`s.
+- Recommended for `codex` in background mode: `CODEX_HOME`, `OPENAI_API_KEY`
+- Recommended for `claude` in background mode: `CLAUDE_CONFIG_DIR`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`
+- Do not set `HOME` to `~/.codex` or `~/.claude`; that points the CLI at the wrong config root.
+
+```toml
+[agents.codex]
+bin = "codex"
+CODEX_HOME = "/Users/yourname/.codex"
+OPENAI_API_KEY = "sk-..."
+
+[agents.claude]
+bin = "claude"
+CLAUDE_CONFIG_DIR = "/Users/yourname/.claude"
+ANTHROPIC_BASE_URL = "https://api-ai-cn.pingpongx.com"
+ANTHROPIC_AUTH_TOKEN = "sk-..."
+```
 
 ## Chat Commands
 
