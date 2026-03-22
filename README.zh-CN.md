@@ -1,6 +1,6 @@
 # im-agent-bridge
 
-[简体中文](./README.zh-CN.md) | [English](./README.en.md)
+[简体中文](./README.zh-CN.md) | [English](./README.md)
 
 将 `DingTalk` / `Feishu` / `Telegram` 的消息桥接到本地 AI CLI（如 `codex`、`claude`）的 TypeScript 服务。
 
