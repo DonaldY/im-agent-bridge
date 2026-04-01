@@ -1,24 +1,26 @@
 import * as Lark from '@larksuiteoapi/node-sdk';
 import { Readable } from 'node:stream';
-import type { LoggerLike } from '../shared';
-import type { FeishuConfig } from '../config/types';
-import { renderReply } from './message-format';
-import type { ReplyTextOptions } from './message-format';
+import type { LoggerLike } from '../shared/index.js';
+import type { FeishuConfig } from '../config/types.js';
+import { renderReply } from './message-format.js';
+import type { ReplyTextOptions } from './message-format.js';
 import type {
   DownloadImageOptions,
   DownloadedImageFile,
   FeishuReplyContext,
   IncomingImageAttachment,
   IncomingMessage,
+  OutgoingAttachment,
   SentMessageRef,
-} from './types';
-import { BaseClient } from './base-client';
-import { toErrorMessage } from '../utils';
+} from './types.js';
+import { BaseClient } from './base-client.js';
+import { toErrorMessage } from '../utils.js';
 
 interface FeishuClientOptions {
   sdk?: typeof Lark;
   apiClient?: any;
   wsClient?: any;
+  fetchImpl?: typeof fetch;
   logger?: LoggerLike;
   debug?: boolean;
 }
@@ -47,6 +49,31 @@ interface FeishuMessageContent {
   text?: string;
   image_key?: string;
 }
+
+interface FeishuTenantTokenResponse {
+  code?: number;
+  msg?: string;
+  tenant_access_token?: string;
+  expire?: number;
+}
+
+interface FeishuUploadImageResponse {
+  code?: number;
+  msg?: string;
+  data?: {
+    image_key?: string;
+  };
+}
+
+interface FeishuUploadFileResponse {
+  code?: number;
+  msg?: string;
+  data?: {
+    file_key?: string;
+  };
+}
+
+const FEISHU_BASE_URL = 'https://open.feishu.cn/open-apis';
 
 function extractTextContent(event: FeishuMessageEvent): string {
   if (event?.message?.message_type !== 'text') {
@@ -141,6 +168,39 @@ function buildTextPayload(text: string): { msg_type: 'text'; content: string } {
   };
 }
 
+function buildMessagePayload<TMessageType extends 'text' | 'image' | 'file'>(
+  msgType: TMessageType,
+  content: Record<string, string>,
+): { msg_type: TMessageType; content: string } {
+  return {
+    msg_type: msgType,
+    content: JSON.stringify(content),
+  };
+}
+
+function inferFeishuFileType(attachment: OutgoingAttachment): string {
+  const fileName = attachment.fileName.toLowerCase();
+  if (fileName.endsWith('.opus')) {
+    return 'opus';
+  }
+  if (fileName.endsWith('.mp4')) {
+    return 'mp4';
+  }
+  if (fileName.endsWith('.pdf')) {
+    return 'pdf';
+  }
+  if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) {
+    return 'doc';
+  }
+  if (fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
+    return 'xls';
+  }
+  if (fileName.endsWith('.ppt') || fileName.endsWith('.pptx')) {
+    return 'ppt';
+  }
+  return 'stream';
+}
+
 function extractMessageId(result: any): string | null {
   return result?.data?.message_id || result?.message_id || result?.data?.data?.message_id || null;
 }
@@ -183,6 +243,9 @@ export class FeishuClient extends BaseClient<FeishuConfig> {
   private sdk: typeof Lark;
   private apiClient: any;
   private wsClient: any;
+  private fetchImpl: typeof fetch;
+  private tenantAccessToken: string | null;
+  private tenantAccessTokenExpiredAt: number;
 
   constructor(config: FeishuConfig, options: FeishuClientOptions = {}) {
     super(config, options);
@@ -196,6 +259,9 @@ export class FeishuClient extends BaseClient<FeishuConfig> {
       appSecret: this.config.appSecret,
       loggerLevel: this.sdk.LoggerLevel?.error,
     });
+    this.fetchImpl = options.fetchImpl || globalThis.fetch;
+    this.tenantAccessToken = null;
+    this.tenantAccessTokenExpiredAt = 0;
   }
 
   async start(onMessage: (incomingMessage: IncomingMessage) => Promise<void> | void): Promise<void> {
@@ -222,15 +288,114 @@ export class FeishuClient extends BaseClient<FeishuConfig> {
     }
   }
 
-  async replyText(replyContext: FeishuReplyContext, text: string, options: ReplyTextOptions = {}): Promise<SentMessageRef | null> {
-    const rendered = renderReply('feishu', text, options);
-    const payload = {
-      data: buildTextPayload(rendered.text),
-    };
+  private async fetchTenantAccessToken(): Promise<string> {
+    if (this.tenantAccessToken && Date.now() < this.tenantAccessTokenExpiredAt - 60_000) {
+      return this.tenantAccessToken;
+    }
 
+    const response = await this.fetchImpl(`${FEISHU_BASE_URL}/auth/v3/tenant_access_token/internal`, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        app_id: this.config.appId,
+        app_secret: this.config.appSecret,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Feishu auth failed with status ${response.status}`);
+    }
+
+    const result = await response.json() as FeishuTenantTokenResponse;
+    if (result.code && result.code !== 0) {
+      throw new Error(result.msg || `Feishu auth failed: ${result.code}`);
+    }
+    if (!result.tenant_access_token) {
+      throw new Error('missing Feishu tenant_access_token');
+    }
+
+    this.tenantAccessToken = result.tenant_access_token;
+    this.tenantAccessTokenExpiredAt = Date.now() + Number(result.expire || 7200) * 1000;
+    return this.tenantAccessToken;
+  }
+
+  private async uploadImage(attachment: OutgoingAttachment): Promise<string> {
+    const accessToken = await this.fetchTenantAccessToken();
+    const form = new FormData();
+    form.append('image_type', 'message');
+    form.append(
+      'image',
+      new Blob([new Uint8Array(attachment.buffer)], { type: attachment.mimeType || 'application/octet-stream' }),
+      attachment.fileName,
+    );
+
+    const response = await this.fetchImpl(`${FEISHU_BASE_URL}/im/v1/images`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: form,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Feishu image upload failed with status ${response.status}`);
+    }
+
+    const result = await response.json() as FeishuUploadImageResponse;
+    if (result.code && result.code !== 0) {
+      throw new Error(result.msg || `Feishu image upload failed: ${result.code}`);
+    }
+    if (!result.data?.image_key) {
+      throw new Error('missing Feishu image_key');
+    }
+
+    return result.data.image_key;
+  }
+
+  private async uploadFile(attachment: OutgoingAttachment): Promise<string> {
+    const accessToken = await this.fetchTenantAccessToken();
+    const form = new FormData();
+    form.append('file_type', inferFeishuFileType(attachment));
+    form.append('file_name', attachment.fileName);
+    form.append(
+      'file',
+      new Blob([new Uint8Array(attachment.buffer)], { type: attachment.mimeType || 'application/octet-stream' }),
+      attachment.fileName,
+    );
+
+    const response = await this.fetchImpl(`${FEISHU_BASE_URL}/im/v1/files`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: form,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Feishu file upload failed with status ${response.status}`);
+    }
+
+    const result = await response.json() as FeishuUploadFileResponse;
+    if (result.code && result.code !== 0) {
+      throw new Error(result.msg || `Feishu file upload failed: ${result.code}`);
+    }
+    if (!result.data?.file_key) {
+      throw new Error('missing Feishu file_key');
+    }
+
+    return result.data.file_key;
+  }
+
+  private async sendMessagePayload(
+    replyContext: FeishuReplyContext,
+    payload: { msg_type: 'text' | 'image' | 'file'; content: string },
+  ): Promise<SentMessageRef | null> {
     if (replyContext?.messageId) {
       const result = await this.apiClient.im.v1.message.reply({
-        ...payload,
+        data: payload,
         path: {
           message_id: replyContext.messageId,
         },
@@ -250,13 +415,12 @@ export class FeishuClient extends BaseClient<FeishuConfig> {
     }
 
     const result = await this.apiClient.im.v1.message.create({
-      ...payload,
       params: {
         receive_id_type: 'chat_id',
       },
       data: {
         receive_id: replyContext.chatId,
-        ...payload.data,
+        ...payload,
       },
     });
 
@@ -268,6 +432,11 @@ export class FeishuClient extends BaseClient<FeishuConfig> {
         chatId: replyContext.chatId,
       }
       : null;
+  }
+
+  async replyText(replyContext: FeishuReplyContext, text: string, options: ReplyTextOptions = {}): Promise<SentMessageRef | null> {
+    const rendered = renderReply('feishu', text, options);
+    return this.sendMessagePayload(replyContext, buildTextPayload(rendered.text));
   }
 
   async updateText(_replyContext: FeishuReplyContext, message: SentMessageRef, text: string, options: ReplyTextOptions = {}): Promise<void> {
@@ -282,6 +451,16 @@ export class FeishuClient extends BaseClient<FeishuConfig> {
       },
       data: buildTextPayload(rendered.text),
     });
+  }
+
+  async sendImage(replyContext: FeishuReplyContext, attachment: OutgoingAttachment): Promise<SentMessageRef | null> {
+    const imageKey = await this.uploadImage(attachment);
+    return this.sendMessagePayload(replyContext, buildMessagePayload('image', { image_key: imageKey }));
+  }
+
+  async sendFile(replyContext: FeishuReplyContext, attachment: OutgoingAttachment): Promise<SentMessageRef | null> {
+    const fileKey = await this.uploadFile(attachment);
+    return this.sendMessagePayload(replyContext, buildMessagePayload('file', { file_key: fileKey }));
   }
 
   async downloadImage(

@@ -1,3 +1,3 @@
-export { BridgeFacade } from './facade';
-export { buildHelpText } from './commands';
-export type { AgentRunContext, BridgeContext, StreamAgentTurnImpl } from './types';
+export { BridgeFacade } from './facade.js';
+export { buildHelpText } from './commands.js';
+export type { AgentRunContext, BridgeContext, StreamAgentTurnImpl } from './types.js';

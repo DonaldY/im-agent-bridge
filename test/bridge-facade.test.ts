@@ -15,9 +15,28 @@ function createConfig(stateDir, workingDir) {
       clientSecret: 'secret',
       allowedUserIds: ['u1'],
     },
+    feishu: {
+      appId: 'app',
+      appSecret: 'secret',
+      allowedUserIds: ['u1'],
+    },
+    telegram: {
+      botToken: 'token',
+      allowedUserIds: ['u1'],
+      apiBase: 'https://api.telegram.org',
+      mode: 'poll',
+      pollTimeoutSeconds: 20,
+      webhookListenHost: '127.0.0.1',
+      webhookPort: 8080,
+      webhookPath: '/telegram/webhook',
+      healthPath: '/healthz',
+      dropPendingUpdates: false,
+      clearWebhookOnStart: true,
+    },
     bridge: {
       defaultAgent: 'codex',
       workingDir,
+      debug: false,
       replyChunkChars: 20,
       replyMode: 'final_only',
       dedupeTtlMs: 60_000,
@@ -587,4 +606,119 @@ test('BridgeFacade converts image input into prompt text', async () => {
   assert.match(prompts[0], /图片文件路径/u);
   assert.match(prompts[0], /这张图讲了什么/u);
   assert.deepEqual(replies, ['🤖 已收到，正在思考中…', 'ok']);
+});
+
+test('BridgeFacade sends generated Feishu image attachments from manifest', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+  const session = await store.createSession('u1', 'codex', workingDir, 'feishu');
+
+  const replies = [];
+  const sentImages = [];
+  const config = createConfig(stateDir, workingDir);
+  config.platform.kind = 'feishu';
+  config.bridge.replyChunkChars = 500;
+
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text) {
+      replies.push(text);
+    },
+    async sendImage(_replyContext, attachment) {
+      sentImages.push(attachment);
+      return null;
+    },
+    async sendFile() {
+      throw new Error('unexpected file send');
+    },
+  }, {
+    async *streamAgentTurnImpl(options) {
+      const turnDir = path.join(workingDir, '.im-agent-bridge', 'outgoing', session.id, 'm-feishu-artifact');
+      assert.match(options.prompt, /附件输出目录/u);
+      await fs.mkdir(turnDir, { recursive: true });
+      await fs.writeFile(path.join(turnDir, 'chart.png'), Buffer.from('png-data'));
+      await fs.writeFile(path.join(turnDir, 'manifest.json'), JSON.stringify({
+        attachments: [
+          {
+            kind: 'image',
+            path: 'chart.png',
+            name: 'chart.png',
+            mimeType: 'image/png',
+          },
+        ],
+      }), 'utf8');
+      yield { type: 'final_text', text: '图已生成。' };
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'feishu',
+    userId: 'u1',
+    conversationType: 'p2p',
+    messageId: 'm-feishu-artifact',
+    text: '把图发我',
+    replyContext: { platform: 'feishu', chatId: 'oc_1', messageId: 'om_1' },
+  });
+
+  assert.deepEqual(replies, ['🤖 已收到，正在思考中…', '图已生成。']);
+  assert.equal(sentImages.length, 1);
+  assert.equal(sentImages[0].fileName, 'chart.png');
+  assert.equal(sentImages[0].mimeType, 'image/png');
+});
+
+test('BridgeFacade falls back to attachment-only reply when manifest has no text output', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+  const session = await store.createSession('u1', 'codex', workingDir, 'feishu');
+
+  const replies = [];
+  const sentFiles = [];
+  const config = createConfig(stateDir, workingDir);
+  config.platform.kind = 'feishu';
+  config.bridge.replyChunkChars = 500;
+
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text) {
+      replies.push(text);
+    },
+    async sendImage() {
+      throw new Error('unexpected image send');
+    },
+    async sendFile(_replyContext, attachment) {
+      sentFiles.push(attachment);
+      return null;
+    },
+  }, {
+    async *streamAgentTurnImpl() {
+      const turnDir = path.join(workingDir, '.im-agent-bridge', 'outgoing', session.id, 'm-feishu-file');
+      await fs.mkdir(turnDir, { recursive: true });
+      await fs.writeFile(path.join(turnDir, 'report.csv'), 'a,b\n1,2\n', 'utf8');
+      await fs.writeFile(path.join(turnDir, 'manifest.json'), JSON.stringify({
+        attachments: [
+          {
+            kind: 'file',
+            path: 'report.csv',
+            name: 'report.csv',
+            mimeType: 'text/csv',
+          },
+        ],
+      }), 'utf8');
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'feishu',
+    userId: 'u1',
+    conversationType: 'p2p',
+    messageId: 'm-feishu-file',
+    text: '导出 CSV 发我',
+    replyContext: { platform: 'feishu', chatId: 'oc_1', messageId: 'om_2' },
+  });
+
+  assert.deepEqual(replies, ['🤖 已收到，正在思考中…', '已生成并回传 1 个附件。']);
+  assert.equal(sentFiles.length, 1);
+  assert.equal(sentFiles[0].fileName, 'report.csv');
 });

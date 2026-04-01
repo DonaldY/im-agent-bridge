@@ -149,3 +149,114 @@ test('FeishuClient.downloadImage reads resource stream', async () => {
   assert.equal(result.sizeBytes, 4);
   assert.equal(result.buffer.toString('utf8'), 'test');
 });
+
+test('FeishuClient.sendImage uploads image then replies with image payload', async () => {
+  const requests = [];
+  const calls = [];
+  const client = new FeishuClient({ appId: 'app', appSecret: 'secret', allowedUserIds: [] }, {
+    fetchImpl: async (url, init = {}) => {
+      requests.push({ url, init });
+      if (String(url).includes('/tenant_access_token/internal')) {
+        return {
+          ok: true,
+          json: async () => ({ tenant_access_token: 'tenant-token', expire: 7200 }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ code: 0, data: { image_key: 'img_v2_uploaded' } }),
+      };
+    },
+    apiClient: {
+      im: {
+        v1: {
+          message: {
+            async reply(payload) {
+              calls.push(payload);
+              return { data: { message_id: 'om_reply_image' } };
+            },
+          },
+        },
+      },
+    },
+    sdk: {
+      Client: class {},
+      WSClient: class {},
+    },
+  });
+
+  const sent = await client.sendImage(
+    { platform: 'feishu', chatId: 'oc_1', messageId: 'om_source' },
+    {
+      kind: 'image',
+      buffer: Buffer.from('fake-image'),
+      fileName: 'chart.png',
+      sizeBytes: 10,
+      mimeType: 'image/png',
+    },
+  );
+
+  assert.equal(requests.length, 2);
+  assert.match(String(requests[1].url), /\/im\/v1\/images$/u);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].data.msg_type, 'image');
+  assert.equal(JSON.parse(calls[0].data.content).image_key, 'img_v2_uploaded');
+  assert.equal(sent.messageId, 'om_reply_image');
+});
+
+test('FeishuClient.sendFile uploads file then creates file message', async () => {
+  const requests = [];
+  const calls = [];
+  const client = new FeishuClient({ appId: 'app', appSecret: 'secret', allowedUserIds: [] }, {
+    fetchImpl: async (url, init = {}) => {
+      requests.push({ url, init });
+      if (String(url).includes('/tenant_access_token/internal')) {
+        return {
+          ok: true,
+          json: async () => ({ tenant_access_token: 'tenant-token', expire: 7200 }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ code: 0, data: { file_key: 'file_uploaded_1' } }),
+      };
+    },
+    apiClient: {
+      im: {
+        v1: {
+          message: {
+            async create(payload) {
+              calls.push(payload);
+              return { data: { message_id: 'om_file_1' } };
+            },
+          },
+        },
+      },
+    },
+    sdk: {
+      Client: class {},
+      WSClient: class {},
+    },
+  });
+
+  const sent = await client.sendFile(
+    { platform: 'feishu', chatId: 'oc_2' },
+    {
+      kind: 'file',
+      buffer: Buffer.from('fake-file'),
+      fileName: 'report.csv',
+      sizeBytes: 9,
+      mimeType: 'text/csv',
+    },
+  );
+
+  assert.equal(requests.length, 2);
+  assert.match(String(requests[1].url), /\/im\/v1\/files$/u);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].data.msg_type, 'file');
+  assert.equal(JSON.parse(calls[0].data.content).file_key, 'file_uploaded_1');
+  assert.equal(calls[0].data.receive_id, 'oc_2');
+  assert.equal(sent.messageId, 'om_file_1');
+});

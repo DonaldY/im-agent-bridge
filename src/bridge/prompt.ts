@@ -1,10 +1,12 @@
-import { takeStableMarkdownStream } from '../client/message-format';
-import type { RunState } from '../agent/types';
-import type { SentMessageRef } from '../client/types';
-import { toErrorMessage } from '../utils';
-import type { IncomingMessage } from '../client/types';
-import type { SessionRecord } from '../storage/types';
-import type { BridgeContext } from './types';
+import fs from 'node:fs/promises';
+import { takeStableMarkdownStream } from '../client/message-format.js';
+import type { RunState } from '../agent/types.js';
+import type { OutgoingAttachment, SentMessageRef } from '../client/types.js';
+import { toErrorMessage } from '../utils.js';
+import type { IncomingMessage } from '../client/types.js';
+import type { SessionRecord } from '../storage/types.js';
+import type { BridgeContext } from './types.js';
+import { buildOutgoingArtifactsPrompt, loadOutgoingAttachments } from './artifacts.js';
 
 const ACK_TEXT = '🤖 已收到，正在思考中…';
 const STREAM_UPDATE_INTERVAL_MS = 900;
@@ -42,6 +44,44 @@ function buildFailureNotice(agent: string, message: string): string {
   return `本次 ${agent} 调用异常，以上内容可能不完整。\n原因：${summarizeErrorMessage(message)}`;
 }
 
+function buildAttachmentFailureNotice(message: string): string {
+  return `附件回传失败：${summarizeErrorMessage(message)}`;
+}
+
+async function sendOutgoingAttachments(
+  context: BridgeContext,
+  incomingMessage: IncomingMessage,
+  attachments: OutgoingAttachment[],
+  details: {
+    messageId?: string;
+    sessionId: string;
+    agent: string;
+    providerSessionId?: string | null;
+  },
+): Promise<string[]> {
+  const errors: string[] = [];
+
+  for (const attachment of attachments) {
+    try {
+      if (attachment.kind === 'image') {
+        await context.sendImage(incomingMessage.replyContext, attachment, {
+          ...details,
+          phase: 'attachment',
+        });
+      } else {
+        await context.sendFile(incomingMessage.replyContext, attachment, {
+          ...details,
+          phase: 'attachment',
+        });
+      }
+    } catch (error) {
+      errors.push(`${attachment.fileName}: ${toErrorMessage(error)}`);
+    }
+  }
+
+  return errors;
+}
+
 export async function handleBridgePrompt(
   context: BridgeContext,
   incomingMessage: IncomingMessage,
@@ -49,7 +89,7 @@ export async function handleBridgePrompt(
   prompt: string,
 ): Promise<void> {
   const startedAt = Date.now();
-  const runContext = await context.resolveAgentRunContext(session);
+  const runContext = await context.resolveAgentRunContext(session, incomingMessage.messageId);
   const { agent } = runContext;
   let currentSession = runContext.session;
   let finalText = '';
@@ -59,9 +99,15 @@ export async function handleBridgePrompt(
   let replyMessage: SentMessageRef | null = null;
   let lastStreamUpdateAt = 0;
   const errors: string[] = [];
+  const attachmentErrors: string[] = [];
+  let outgoingAttachments: OutgoingAttachment[] = [];
   const existingRun = context.getRunState(currentSession.id);
   const streamReplies = context.config.bridge.replyMode === 'stream';
   const canEditReply = supportsEditableReply(incomingMessage);
+  const canSendAttachments = context.supportsOutgoingAttachments(incomingMessage.replyContext.platform);
+  const agentPrompt = canSendAttachments
+    ? `${prompt}\n\n${buildOutgoingArtifactsPrompt(runContext.turnOutputDir, runContext.manifestPath)}`
+    : prompt;
 
   if (existingRun) {
     await context.replyText(
@@ -120,6 +166,10 @@ export async function handleBridgePrompt(
       });
     }
 
+    if (canSendAttachments) {
+      await fs.mkdir(runContext.turnOutputDir, { recursive: true });
+    }
+
     replyMessage = await context.replyText(
       incomingMessage.replyContext,
       ACK_TEXT,
@@ -136,7 +186,7 @@ export async function handleBridgePrompt(
     for await (const event of context.streamAgentTurnImpl({
       config: context.config,
       agent: runContext.agent,
-      prompt,
+      prompt: agentPrompt,
       workingDir: runContext.workingDir,
       upstreamSessionId: runContext.upstreamSessionId,
       abortSignal: activeRun.abortController.signal,
@@ -250,7 +300,16 @@ export async function handleBridgePrompt(
       return;
     }
 
-    const reply = finalText || partialText || (errors[0] ? buildFailureReply(errors[0]) : '未获得可用回复。');
+    if (canSendAttachments) {
+      const outgoing = await loadOutgoingAttachments(runContext.turnOutputDir, runContext.manifestPath);
+      outgoingAttachments = outgoing.attachments;
+      attachmentErrors.push(...outgoing.errors);
+    }
+
+    const reply = finalText
+      || partialText
+      || (outgoingAttachments.length > 0 ? `已生成并回传 ${outgoingAttachments.length} 个附件。` : '')
+      || (errors[0] ? buildFailureReply(errors[0]) : '未获得可用回复。');
     const failureNotice = errors[0] && (finalText || partialText)
       ? buildFailureNotice(agent, errors[0])
       : null;
@@ -345,13 +404,35 @@ export async function handleBridgePrompt(
       }
     }
 
+    attachmentErrors.push(...await sendOutgoingAttachments(context, incomingMessage, outgoingAttachments, {
+      messageId: incomingMessage.messageId,
+      sessionId: currentSession.id,
+      agent,
+      providerSessionId: activeRun.providerSessionId || 'starting',
+    }));
+
+    for (const message of attachmentErrors) {
+      await context.replyText(
+        incomingMessage.replyContext,
+        buildAttachmentFailureNotice(message),
+        {
+          messageId: incomingMessage.messageId,
+          sessionId: currentSession.id,
+          agent,
+          providerSessionId: activeRun.providerSessionId || 'starting',
+          phase: 'attachment_error',
+        },
+        { mode: 'final' },
+      );
+    }
+
     await context.store.appendConversationLog(currentSession.id, {
       direction: 'out',
       platform: incomingMessage.platform,
       agent,
       providerSessionId: activeRun.providerSessionId,
       finalText: reply,
-      errors,
+      errors: [...errors, ...attachmentErrors],
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {

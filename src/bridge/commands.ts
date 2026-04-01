@@ -1,9 +1,9 @@
-import type { AgentName } from '../shared';
-import type { RunState } from '../agent/types';
-import type { IncomingMessage } from '../client/types';
-import type { AppConfig } from '../config/types';
-import type { SessionRecord } from '../storage/types';
-import type { BridgeContext } from './types';
+import type { AgentName } from '../shared/index.js';
+import type { RunState } from '../agent/types.js';
+import type { IncomingMessage } from '../client/types.js';
+import type { AppConfig } from '../config/types.js';
+import type { SessionRecord } from '../storage/types.js';
+import type { BridgeContext } from './types.js';
 
 export const INTERRUPT_COMMANDS = new Set(['/interrupt', '/stop', '/cancel']);
 
@@ -75,6 +75,14 @@ function formatImageStatusText(config: AppConfig, session: SessionRecord): strin
   return `• 图片输入：可用（当前 Agent：\`${session.activeAgent}\`）`;
 }
 
+function formatAttachmentStatusText(config: AppConfig): string {
+  if (config.platform.kind === 'feishu') {
+    return '• 附件回传：可用（支持图片与文件回传）';
+  }
+
+  return '• 附件回传：当前平台暂不支持';
+}
+
 export function buildHelpText(config: AppConfig): string {
   const imageSupportText = config.bridge.imageEnabled
     ? `• 当前支持飞书/钉钉单图输入（仅 \`codex\` agent；格式：image/png、image/jpeg、image/webp、image/gif；大小：${config.bridge.imageMaxMb}MB）`
@@ -91,6 +99,7 @@ export function buildHelpText(config: AppConfig): string {
     'ℹ️ 说明',
     imageSupportText,
     '• 单轮最多 1 张图片，超限会直接拒绝',
+    formatAttachmentStatusText(config),
     `• 当前回复模式：\`${config.bridge.replyMode}\``,
     '• 其他文本会直接转发给当前 agent',
   ].join('\n\n');
@@ -233,9 +242,10 @@ export async function handleBridgeCommand(
     const currentRun = context.getRunState(current.id);
     const statusText = formatStatusText(current, currentRun, context.getSessionWorkingDir(current));
     const imageStatusText = formatImageStatusText(context.config, current);
+    const attachmentStatusText = formatAttachmentStatusText(context.config);
     await context.replyText(
       incomingMessage.replyContext,
-      `${statusText}\n\n${imageStatusText}`,
+      `${statusText}\n\n${imageStatusText}\n\n${attachmentStatusText}`,
       {
         messageId: incomingMessage.messageId,
         sessionId: current.id,

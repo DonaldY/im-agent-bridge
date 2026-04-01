@@ -1,13 +1,13 @@
-export { JsonSessionRepository } from './json-session-repository';
-export { JsonMessageDedupeStore } from './json-message-dedupe-store';
-export { JsonlConversationLogger } from './jsonl-conversation-logger';
+export { JsonSessionRepository } from './json-session-repository.js';
+export { JsonMessageDedupeStore } from './json-message-dedupe-store.js';
+export { JsonlConversationLogger } from './jsonl-conversation-logger.js';
 export {
   cloneSession,
   createSessionRecord,
   emptyProviderSessionIds,
   emptyProviderWorkingDirs,
   normalizeSession,
-} from './session-utils';
+} from './session-utils.js';
 export type {
   ConversationLogEntry,
   ConversationLoggerLike,
@@ -15,4 +15,4 @@ export type {
   SessionRecord,
   SessionRepositoryLike,
   StateStoreOptions,
-} from './types';
+} from './types.js';

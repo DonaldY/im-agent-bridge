@@ -1,6 +1,6 @@
-import type { LoggerLike } from '../shared';
-import type { ReplyTextOptions } from './message-format';
-import type { ClientLike, ClientStartHandler, PlatformReplyContext, SentMessageRef } from './types';
+import type { LoggerLike } from '../shared/index.js';
+import type { ReplyTextOptions } from './message-format.js';
+import type { ClientLike, ClientStartHandler, PlatformReplyContext, SentMessageRef } from './types.js';
 
 export class BaseClient<TConfig> implements ClientLike {
   protected config: TConfig;

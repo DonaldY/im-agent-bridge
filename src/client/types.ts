@@ -1,5 +1,5 @@
-import type { PlatformKind } from '../shared';
-import type { ReplyTextOptions } from './message-format';
+import type { PlatformKind } from '../shared/index.js';
+import type { ReplyTextOptions } from './message-format.js';
 
 export interface PlatformReplyContextBase {
   platform: PlatformKind;
@@ -32,6 +32,17 @@ export interface SentMessageRef {
   platform: PlatformKind;
   messageId: string;
   chatId?: string | number;
+}
+
+export type OutgoingAttachmentKind = 'image' | 'file';
+
+export interface OutgoingAttachment {
+  kind: OutgoingAttachmentKind;
+  buffer: Buffer;
+  fileName: string;
+  sizeBytes: number;
+  mimeType?: string;
+  filePath?: string;
 }
 
 export interface IncomingImageAttachment {
@@ -76,6 +87,8 @@ export interface ClientLike {
   replyText(replyContext: PlatformReplyContext, text: string, options?: ReplyTextOptions): Promise<SentMessageRef | null | void>;
   updateText?(replyContext: PlatformReplyContext, message: SentMessageRef, text: string, options?: ReplyTextOptions): Promise<void>;
   sendTyping?(replyContext: PlatformReplyContext): Promise<void>;
+  sendImage?(replyContext: PlatformReplyContext, attachment: OutgoingAttachment): Promise<SentMessageRef | null | void>;
+  sendFile?(replyContext: PlatformReplyContext, attachment: OutgoingAttachment): Promise<SentMessageRef | null | void>;
   downloadImage?(
     incomingMessage: IncomingMessage,
     image: IncomingImageAttachment,

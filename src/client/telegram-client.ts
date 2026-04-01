@@ -1,13 +1,13 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { IncomingMessage as NodeIncomingMessage, ServerResponse } from 'node:http';
-import type { LoggerLike } from '../shared';
-import type { TelegramConfig } from '../config/types';
-import { renderReply } from './message-format';
-import type { ReplyTextOptions } from './message-format';
-import type { TelegramReplyContext, IncomingMessage, SentMessageRef } from './types';
-import { BaseClient } from './base-client';
-import { sleep, toErrorMessage } from '../utils';
+import type { LoggerLike } from '../shared/index.js';
+import type { TelegramConfig } from '../config/types.js';
+import { renderReply } from './message-format.js';
+import type { ReplyTextOptions } from './message-format.js';
+import type { TelegramReplyContext, IncomingMessage, SentMessageRef } from './types.js';
+import { BaseClient } from './base-client.js';
+import { sleep, toErrorMessage } from '../utils.js';
 
 interface TelegramClientOptions {
   fetchImpl?: typeof fetch;

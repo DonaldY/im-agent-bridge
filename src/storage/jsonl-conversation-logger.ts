@@ -1,7 +1,7 @@
 import path from 'node:path';
-import type { ConversationLogEntry } from './types';
-import { appendLine, ensureDir, nowIso } from '../utils';
-import type { ConversationLoggerLike } from './types';
+import type { ConversationLogEntry } from './types.js';
+import { appendLine, ensureDir, nowIso } from '../utils.js';
+import type { ConversationLoggerLike } from './types.js';
 
 const CONVERSATION_LOGS_DIRNAME = 'conversation-logs';
 

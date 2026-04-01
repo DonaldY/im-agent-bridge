@@ -9,8 +9,8 @@ import {
   toErrorMessage,
   writeFileAtomic,
   which,
-} from '../utils';
-import type { AppConfig } from '../config/types';
+} from '../utils.js';
+import type { AppConfig } from '../config/types.js';
 
 export type KeepAwakeMode = 'none' | 'idle' | 'system' | 'on_ac';
 

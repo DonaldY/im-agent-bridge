@@ -1,7 +1,7 @@
-import type { AppConfig } from '../config/types';
-import type { AgentEvent } from './types';
-import { BaseAgent } from './base-agent';
-import type { BuildArgsOptions, JsonRecord, ParserState } from './types';
+import type { AppConfig } from '../config/types.js';
+import type { AgentEvent } from './types.js';
+import { BaseAgent } from './base-agent.js';
+import type { BuildArgsOptions, JsonRecord, ParserState } from './types.js';
 
 export function parseClaudeLine(line: string, state: ParserState = {}): AgentEvent[] {
   const data = JSON.parse(line) as JsonRecord;

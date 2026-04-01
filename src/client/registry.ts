@@ -1,9 +1,9 @@
-import type { LoggerLike } from '../shared';
-import type { AppConfig } from '../config/types';
-import type { ClientLike } from './types';
-import { DingTalkClient } from './dingtalk-client';
-import { FeishuClient } from './feishu-client';
-import { TelegramClient } from './telegram-client';
+import type { LoggerLike } from '../shared/index.js';
+import type { AppConfig } from '../config/types.js';
+import type { ClientLike } from './types.js';
+import { DingTalkClient } from './dingtalk-client.js';
+import { FeishuClient } from './feishu-client.js';
+import { TelegramClient } from './telegram-client.js';
 
 export interface ClientFactoryOptions {
   debug?: boolean;

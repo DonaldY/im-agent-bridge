@@ -1,24 +1,25 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { streamAgentTurn } from '../agent/runner';
-import { buildHelpText, handleBridgeCommand } from './commands';
-import { handleBridgePrompt } from './prompt';
-import type { RunState } from '../agent/types';
-import type { ReplyTextOptions } from '../client/message-format';
-import { splitMarkdownBlocks } from '../client/message-format';
+import { streamAgentTurn } from '../agent/runner.js';
+import { buildHelpText, handleBridgeCommand } from './commands.js';
+import { handleBridgePrompt } from './prompt.js';
+import type { RunState } from '../agent/types.js';
+import type { ReplyTextOptions } from '../client/message-format.js';
+import { splitMarkdownBlocks } from '../client/message-format.js';
 import type {
   ClientLike,
   IncomingImageAttachment,
   IncomingMessage,
+  OutgoingAttachment,
   PlatformReplyContext,
   SentMessageRef,
-} from '../client/types';
-import type { AppConfig } from '../config/types';
-import type { LoggerLike, PlatformKind } from '../shared';
-import type { StateStore } from '../storage';
-import type { SessionRecord } from '../storage/types';
-import { formatLogValue, sleep, toErrorMessage } from '../utils';
-import type { AgentRunContext, BridgeContext, StreamAgentTurnImpl } from './types';
+} from '../client/types.js';
+import type { AppConfig } from '../config/types.js';
+import type { LoggerLike, PlatformKind } from '../shared/index.js';
+import type { StateStore } from '../storage/index.js';
+import type { SessionRecord } from '../storage/types.js';
+import { formatLogValue, sleep, toErrorMessage } from '../utils.js';
+import type { AgentRunContext, BridgeContext, StreamAgentTurnImpl } from './types.js';
 
 function isSupportedConversationType(conversationType?: string): boolean {
   if (!conversationType) {
@@ -94,7 +95,12 @@ function toImageExtension(mimeType: string): string {
   return 'jpg';
 }
 
-export { buildHelpText } from './commands';
+function toSafePathSegment(value: string): string {
+  const normalized = String(value || '').trim().replace(/[^a-zA-Z0-9._-]+/gu, '_');
+  return normalized || 'turn';
+}
+
+export { buildHelpText } from './commands.js';
 
 export class BridgeFacade {
   private config: AppConfig;
@@ -134,6 +140,9 @@ export class BridgeFacade {
       replyText: this.replyText.bind(this),
       updateText: this.updateText.bind(this),
       sendTyping: this.sendTyping.bind(this),
+      supportsOutgoingAttachments: this.supportsOutgoingAttachments.bind(this),
+      sendImage: this.sendImage.bind(this),
+      sendFile: this.sendFile.bind(this),
       resolveWorkingDir: this.resolveWorkingDir.bind(this),
       resolveAgentRunContext: this.resolveAgentRunContext.bind(this),
     };
@@ -241,6 +250,54 @@ export class BridgeFacade {
 
     this.logDebug('[bridge] typing', details);
     await this.client.sendTyping(replyContext);
+  }
+
+  supportsOutgoingAttachments(platform: PlatformReplyContext['platform']): boolean {
+    if (platform !== 'feishu') {
+      return false;
+    }
+
+    return typeof this.client.sendImage === 'function' && typeof this.client.sendFile === 'function';
+  }
+
+  async sendImage(
+    replyContext: PlatformReplyContext,
+    attachment: OutgoingAttachment,
+    details: Record<string, unknown> | null = null,
+  ): Promise<SentMessageRef | null> {
+    if (typeof this.client.sendImage !== 'function') {
+      throw new Error(`platform ${replyContext.platform} does not support image attachments`);
+    }
+
+    this.logDebug('[bridge] send image', {
+      ...(details || {}),
+      fileName: attachment.fileName,
+      sizeBytes: attachment.sizeBytes,
+      mimeType: attachment.mimeType,
+      filePath: attachment.filePath,
+    });
+    const sent = await this.client.sendImage(replyContext, attachment);
+    return sent || null;
+  }
+
+  async sendFile(
+    replyContext: PlatformReplyContext,
+    attachment: OutgoingAttachment,
+    details: Record<string, unknown> | null = null,
+  ): Promise<SentMessageRef | null> {
+    if (typeof this.client.sendFile !== 'function') {
+      throw new Error(`platform ${replyContext.platform} does not support file attachments`);
+    }
+
+    this.logDebug('[bridge] send file', {
+      ...(details || {}),
+      fileName: attachment.fileName,
+      sizeBytes: attachment.sizeBytes,
+      mimeType: attachment.mimeType,
+      filePath: attachment.filePath,
+    });
+    const sent = await this.client.sendFile(replyContext, attachment);
+    return sent || null;
   }
 
   getImageMaxBytes(): number {
@@ -447,7 +504,7 @@ export class BridgeFacade {
     return resolved;
   }
 
-  async resolveAgentRunContext(session: SessionRecord): Promise<AgentRunContext> {
+  async resolveAgentRunContext(session: SessionRecord, messageId?: string): Promise<AgentRunContext> {
     const agent = session.activeAgent;
     const workingDir = this.getSessionWorkingDir(session);
     const providerWorkingDir = session.providerWorkingDirs?.[agent];
@@ -461,7 +518,22 @@ export class BridgeFacade {
       upstreamSessionId = null;
     }
 
-    return { session: currentSession, agent, workingDir, upstreamSessionId };
+    const turnOutputDir = path.join(
+      workingDir,
+      '.im-agent-bridge',
+      'outgoing',
+      currentSession.id,
+      toSafePathSegment(messageId || `turn-${Date.now()}`),
+    );
+
+    return {
+      session: currentSession,
+      agent,
+      workingDir,
+      upstreamSessionId,
+      turnOutputDir,
+      manifestPath: path.join(turnOutputDir, 'manifest.json'),
+    };
   }
 
   async handlePrompt(incomingMessage: IncomingMessage, session: SessionRecord, prompt: string): Promise<void> {

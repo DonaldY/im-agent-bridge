@@ -1,6 +1,6 @@
-import type { AgentName, PlatformKind, TelegramMode } from '../shared';
-import type { AppConfig } from './types';
-import { expandHomePath, which } from '../utils';
+import type { AgentName, PlatformKind, TelegramMode } from '../shared/index.js';
+import type { AppConfig } from './types.js';
+import { expandHomePath, which } from '../utils.js';
 
 export const DEFAULT_PLATFORM_KIND: PlatformKind = 'dingtalk';
 export const VALID_AGENTS: AgentName[] = ['claude', 'codex'];
