@@ -143,3 +143,57 @@ test('DingTalkClient.downloadImage resolves download url and fetches file', asyn
   assert.equal(result.buffer.toString('utf8'), 'test');
   assert.equal(requests.length, 3);
 });
+
+test('DingTalkClient.sendImage uploads media then posts markdown image payload', async () => {
+  const requests = [];
+  const client = new DingTalkClient({ clientId: 'cid', clientSecret: 'secret' }, {
+    fetchImpl: async (url, init = {}) => {
+      requests.push({ url, init });
+
+      if (String(url).includes('/gettoken')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'token_1', expires_in: 7200 }),
+        };
+      }
+
+      if (String(url).includes('/media/upload')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ errcode: 0, media_id: '@media_1' }),
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ errcode: 0 }),
+      };
+    },
+  });
+
+  await client.sendImage(
+    {
+      platform: 'dingtalk',
+      sessionWebhook: 'https://example.com/hook',
+      sessionWebhookExpiredTime: Date.now() + 60_000,
+    },
+    {
+      kind: 'image',
+      buffer: Buffer.from('fake-image'),
+      fileName: 'chart.png',
+      sizeBytes: 10,
+      mimeType: 'image/png',
+    },
+  );
+
+  assert.equal(requests.length, 3);
+  assert.match(String(requests[1].url), /\/media\/upload\?/u);
+  assert.equal(requests[2].url, 'https://example.com/hook');
+  const body = JSON.parse(requests[2].init.body);
+  assert.equal(body.msgtype, 'markdown');
+  assert.match(body.markdown.text, /!\[chart\.png\]\(@media_1\)/u);
+});

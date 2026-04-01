@@ -1,6 +1,6 @@
 import type { AgentEvent, AgentRunOptions, RunState } from '../agent/types.js';
 import type { ReplyTextOptions } from '../client/message-format.js';
-import type { OutgoingAttachment, PlatformReplyContext, SentMessageRef } from '../client/types.js';
+import type { OutgoingAttachment, OutgoingAttachmentKind, PlatformReplyContext, SentMessageRef } from '../client/types.js';
 import type { AppConfig } from '../config/types.js';
 import type { LoggerLike } from '../shared/index.js';
 import type { StateStore } from '../storage/index.js';
@@ -29,7 +29,7 @@ export interface BridgeContext {
   replyText(replyContext: PlatformReplyContext, text: string, details?: Record<string, unknown> | null, options?: ReplyTextOptions): Promise<SentMessageRef | null>;
   updateText(replyContext: PlatformReplyContext, message: SentMessageRef, text: string, details?: Record<string, unknown> | null, options?: ReplyTextOptions): Promise<void>;
   sendTyping(replyContext: PlatformReplyContext, details?: Record<string, unknown> | null): Promise<void>;
-  supportsOutgoingAttachments(platform: PlatformReplyContext['platform']): boolean;
+  getSupportedOutgoingAttachmentKinds(platform: PlatformReplyContext['platform']): OutgoingAttachmentKind[];
   sendImage(replyContext: PlatformReplyContext, attachment: OutgoingAttachment, details?: Record<string, unknown> | null): Promise<SentMessageRef | null>;
   sendFile(replyContext: PlatformReplyContext, attachment: OutgoingAttachment, details?: Record<string, unknown> | null): Promise<SentMessageRef | null>;
   resolveWorkingDir(session: SessionRecord, rawPath: string): Promise<string>;

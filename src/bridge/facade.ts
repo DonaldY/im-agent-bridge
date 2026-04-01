@@ -11,6 +11,7 @@ import type {
   IncomingImageAttachment,
   IncomingMessage,
   OutgoingAttachment,
+  OutgoingAttachmentKind,
   PlatformReplyContext,
   SentMessageRef,
 } from '../client/types.js';
@@ -140,7 +141,7 @@ export class BridgeFacade {
       replyText: this.replyText.bind(this),
       updateText: this.updateText.bind(this),
       sendTyping: this.sendTyping.bind(this),
-      supportsOutgoingAttachments: this.supportsOutgoingAttachments.bind(this),
+      getSupportedOutgoingAttachmentKinds: this.getSupportedOutgoingAttachmentKinds.bind(this),
       sendImage: this.sendImage.bind(this),
       sendFile: this.sendFile.bind(this),
       resolveWorkingDir: this.resolveWorkingDir.bind(this),
@@ -252,12 +253,23 @@ export class BridgeFacade {
     await this.client.sendTyping(replyContext);
   }
 
-  supportsOutgoingAttachments(platform: PlatformReplyContext['platform']): boolean {
-    if (platform !== 'feishu') {
-      return false;
+  getSupportedOutgoingAttachmentKinds(platform: PlatformReplyContext['platform']): OutgoingAttachmentKind[] {
+    if (platform === 'feishu') {
+      const kinds: OutgoingAttachmentKind[] = [];
+      if (typeof this.client.sendImage === 'function') {
+        kinds.push('image');
+      }
+      if (typeof this.client.sendFile === 'function') {
+        kinds.push('file');
+      }
+      return kinds;
     }
 
-    return typeof this.client.sendImage === 'function' && typeof this.client.sendFile === 'function';
+    if (platform === 'dingtalk' && typeof this.client.sendImage === 'function') {
+      return ['image'];
+    }
+
+    return [];
   }
 
   async sendImage(

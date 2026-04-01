@@ -9,6 +9,7 @@ import type {
   DownloadedImageFile,
   IncomingImageAttachment,
   IncomingMessage,
+  OutgoingAttachment,
 } from './types.js';
 import { BaseClient } from './base-client.js';
 import { formatLogValue, toErrorMessage, toUtf8String } from '../utils.js';
@@ -65,6 +66,12 @@ interface DingTalkMessageFileResponse {
 interface DingTalkAccessTokenResponse {
   access_token?: string;
   expires_in?: number;
+  errmsg?: string;
+}
+
+interface DingTalkMediaUploadResponse {
+  media_id?: string;
+  errcode?: number;
   errmsg?: string;
 }
 
@@ -173,6 +180,16 @@ function buildMarkdownPayload(text: string): DingTalkMarkdownPayload {
     markdown: {
       title: truncateMarkdownTitle(content),
       text: content,
+    },
+  };
+}
+
+function buildImageMarkdownPayload(mediaId: string, title = 'image'): DingTalkMarkdownPayload {
+  return {
+    msgtype: 'markdown',
+    markdown: {
+      title: truncateMarkdownTitle(title),
+      text: `![${title}](${mediaId})`,
     },
   };
 }
@@ -450,6 +467,70 @@ export class DingTalkClient extends BaseClient<DingTalkConfig> {
         'content-type': 'application/json',
       },
       body: JSON.stringify(buildMarkdownPayload(rendered.text) satisfies DingTalkMarkdownPayload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`DingTalk reply failed with status ${response.status}`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return;
+    }
+
+    const result = await response.json() as { errcode?: number; errmsg?: string };
+    if (typeof result.errcode === 'number' && result.errcode !== 0) {
+      throw new Error(result.errmsg || `DingTalk reply failed: ${result.errcode}`);
+    }
+  }
+
+  async sendImage(replyContext: DingTalkReplyContext, attachment: OutgoingAttachment): Promise<void> {
+    if (!replyContext?.sessionWebhook) {
+      throw new Error('sessionWebhook is required for DingTalk replies');
+    }
+
+    if (
+      typeof replyContext.sessionWebhookExpiredTime === 'number' &&
+      replyContext.sessionWebhookExpiredTime > 0 &&
+      replyContext.sessionWebhookExpiredTime < Date.now()
+    ) {
+      throw new Error('sessionWebhook has expired');
+    }
+
+    const accessToken = await this.fetchAccessToken();
+    const form = new FormData();
+    form.append(
+      'media',
+      new Blob([new Uint8Array(attachment.buffer)], { type: attachment.mimeType || 'application/octet-stream' }),
+      attachment.fileName,
+    );
+
+    const uploadResponse = await this.fetchImpl(
+      `https://oapi.dingtalk.com/media/upload?access_token=${encodeURIComponent(accessToken)}&type=image`,
+      {
+        method: 'POST',
+        body: form,
+      },
+    );
+
+    if (!uploadResponse.ok) {
+      throw new Error(`DingTalk media upload failed with status ${uploadResponse.status}`);
+    }
+
+    const uploadResult = await uploadResponse.json() as DingTalkMediaUploadResponse;
+    if (typeof uploadResult.errcode === 'number' && uploadResult.errcode !== 0) {
+      throw new Error(uploadResult.errmsg || `DingTalk media upload failed: ${uploadResult.errcode}`);
+    }
+    if (!uploadResult.media_id) {
+      throw new Error('missing DingTalk media_id');
+    }
+
+    const response = await this.fetchImpl(replyContext.sessionWebhook, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(buildImageMarkdownPayload(uploadResult.media_id, attachment.fileName)),
     });
 
     if (!response.ok) {

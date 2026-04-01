@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { takeStableMarkdownStream } from '../client/message-format.js';
 import type { RunState } from '../agent/types.js';
-import type { OutgoingAttachment, SentMessageRef } from '../client/types.js';
+import type { OutgoingAttachment, OutgoingAttachmentKind, SentMessageRef } from '../client/types.js';
 import { toErrorMessage } from '../utils.js';
 import type { IncomingMessage } from '../client/types.js';
 import type { SessionRecord } from '../storage/types.js';
@@ -52,6 +52,7 @@ async function sendOutgoingAttachments(
   context: BridgeContext,
   incomingMessage: IncomingMessage,
   attachments: OutgoingAttachment[],
+  supportedKinds: OutgoingAttachmentKind[],
   details: {
     messageId?: string;
     sessionId: string;
@@ -62,6 +63,11 @@ async function sendOutgoingAttachments(
   const errors: string[] = [];
 
   for (const attachment of attachments) {
+    if (!supportedKinds.includes(attachment.kind)) {
+      errors.push(`${attachment.fileName}: 当前平台不支持回传 ${attachment.kind} 附件`);
+      continue;
+    }
+
     try {
       if (attachment.kind === 'image') {
         await context.sendImage(incomingMessage.replyContext, attachment, {
@@ -104,9 +110,10 @@ export async function handleBridgePrompt(
   const existingRun = context.getRunState(currentSession.id);
   const streamReplies = context.config.bridge.replyMode === 'stream';
   const canEditReply = supportsEditableReply(incomingMessage);
-  const canSendAttachments = context.supportsOutgoingAttachments(incomingMessage.replyContext.platform);
+  const supportedAttachmentKinds = context.getSupportedOutgoingAttachmentKinds(incomingMessage.replyContext.platform);
+  const canSendAttachments = supportedAttachmentKinds.length > 0;
   const agentPrompt = canSendAttachments
-    ? `${prompt}\n\n${buildOutgoingArtifactsPrompt(runContext.turnOutputDir, runContext.manifestPath)}`
+    ? `${prompt}\n\n${buildOutgoingArtifactsPrompt(runContext.turnOutputDir, runContext.manifestPath, supportedAttachmentKinds)}`
     : prompt;
 
   if (existingRun) {
@@ -404,7 +411,7 @@ export async function handleBridgePrompt(
       }
     }
 
-    attachmentErrors.push(...await sendOutgoingAttachments(context, incomingMessage, outgoingAttachments, {
+    attachmentErrors.push(...await sendOutgoingAttachments(context, incomingMessage, outgoingAttachments, supportedAttachmentKinds, {
       messageId: incomingMessage.messageId,
       sessionId: currentSession.id,
       agent,

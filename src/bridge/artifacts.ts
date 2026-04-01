@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { OutgoingAttachment } from '../client/types.js';
+import type { OutgoingAttachment, OutgoingAttachmentKind } from '../client/types.js';
 import { toErrorMessage } from '../utils.js';
 
 interface RawAttachmentManifestEntry {
@@ -64,14 +64,22 @@ function attachmentSizeLabel(kind: OutgoingAttachment['kind']): string {
   return kind === 'image' ? '10MB' : '30MB';
 }
 
-export function buildOutgoingArtifactsPrompt(outputDir: string, manifestPath: string): string {
+export function buildOutgoingArtifactsPrompt(
+  outputDir: string,
+  manifestPath: string,
+  supportedKinds: OutgoingAttachmentKind[],
+): string {
+  const kindHint = supportedKinds.length > 0
+    ? supportedKinds.map((kind) => `"${kind}"`).join(' | ')
+    : '';
+
   return [
     '如果用户明确要求把图片或文件发回当前 IM 会话，请使用附件回传协议。',
     `附件输出目录：${outputDir}`,
     `附件清单路径：${manifestPath}`,
     '要求：',
     '1. 先把需要回传的文件写入附件输出目录。',
-    '2. 再创建 manifest.json，格式为 {"attachments":[{"kind":"image"|"file","path":"相对或绝对路径","name":"文件名","mimeType":"可选 MIME"}]}。',
+    `2. 再创建 manifest.json，格式为 {"attachments":[{"kind":${kindHint},"path":"相对或绝对路径","name":"文件名","mimeType":"可选 MIME"}]}。`,
     '3. 只有真正生成成功并写入 manifest.json 的文件，桥接层才会回传到 IM。',
     '4. 如果本轮不需要回传附件，不要创建 manifest.json。',
     '5. 不要在回复文本中声称“已发送附件”，除非你已经完成以上步骤。',

@@ -80,6 +80,10 @@ function formatAttachmentStatusText(config: AppConfig): string {
     return '• 附件回传：可用（支持图片与文件回传）';
   }
 
+  if (config.platform.kind === 'dingtalk') {
+    return '• 附件回传：当前平台仅支持图片回传';
+  }
+
   return '• 附件回传：当前平台暂不支持';
 }
 

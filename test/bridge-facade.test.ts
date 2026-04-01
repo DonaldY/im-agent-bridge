@@ -722,3 +722,58 @@ test('BridgeFacade falls back to attachment-only reply when manifest has no text
   assert.equal(sentFiles.length, 1);
   assert.equal(sentFiles[0].fileName, 'report.csv');
 });
+
+test('BridgeFacade sends generated DingTalk image attachments from manifest', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+  const session = await store.createSession('u1', 'codex', workingDir, 'dingtalk');
+
+  const replies = [];
+  const sentImages = [];
+  const config = createConfig(stateDir, workingDir);
+  config.platform.kind = 'dingtalk';
+  config.bridge.replyChunkChars = 500;
+
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text) {
+      replies.push(text);
+    },
+    async sendImage(_replyContext, attachment) {
+      sentImages.push(attachment);
+      return null;
+    },
+  }, {
+    async *streamAgentTurnImpl(options) {
+      const turnDir = path.join(workingDir, '.im-agent-bridge', 'outgoing', session.id, 'm-dingtalk-artifact');
+      assert.match(options.prompt, /"image"/u);
+      await fs.mkdir(turnDir, { recursive: true });
+      await fs.writeFile(path.join(turnDir, 'poster.png'), Buffer.from('png-data'));
+      await fs.writeFile(path.join(turnDir, 'manifest.json'), JSON.stringify({
+        attachments: [
+          {
+            kind: 'image',
+            path: 'poster.png',
+            name: 'poster.png',
+            mimeType: 'image/png',
+          },
+        ],
+      }), 'utf8');
+      yield { type: 'final_text', text: '图已生成。' };
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'dingtalk',
+    userId: 'u1',
+    conversationType: '1',
+    messageId: 'm-dingtalk-artifact',
+    text: '把图发我',
+    replyContext: { platform: 'dingtalk', sessionWebhook: 'https://example.com/hook', sessionWebhookExpiredTime: Date.now() + 60_000 },
+  });
+
+  assert.deepEqual(replies, ['🤖 已收到，正在思考中…', '图已生成。']);
+  assert.equal(sentImages.length, 1);
+  assert.equal(sentImages[0].fileName, 'poster.png');
+});
