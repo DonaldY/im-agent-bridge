@@ -1,8 +1,8 @@
-import type { AgentName } from '../shared/index.js';
-import type { AppConfig } from '../config/types.js';
-import type { AgentProviderLike } from './types.js';
-import { ClaudeAgent } from './claude-agent.js';
-import { CodexAgent } from './codex-agent.js';
+import type { AgentName } from '../shared';
+import type { AppConfig } from '../config/types';
+import type { AgentProviderLike } from './types';
+import { ClaudeAgent } from './claude-agent';
+import { CodexAgent } from './codex-agent';
 
 export type AgentProviderConstructor = new (config: AppConfig) => AgentProviderLike;
 

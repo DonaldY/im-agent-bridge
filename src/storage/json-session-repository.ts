@@ -1,10 +1,10 @@
 import path from 'node:path';
-import type { AgentName, PlatformKind } from '../shared/index.js';
-import type { SessionRecord } from './types.js';
-import { ensureDir, nowIso, readJson, writeJsonAtomic } from '../utils.js';
-import type { SessionRepositoryLike } from './types.js';
-import { cloneSession, createSessionRecord, normalizeSession } from './session-utils.js';
-import { DEFAULT_PLATFORM_KIND } from '../config/index.js';
+import type { AgentName, PlatformKind } from '../shared';
+import type { SessionRecord } from './types';
+import { ensureDir, nowIso, readJson, writeJsonAtomic } from '../utils';
+import type { SessionRepositoryLike } from './types';
+import { cloneSession, createSessionRecord, normalizeSession } from './session-utils';
+import { DEFAULT_PLATFORM_KIND } from '../config';
 
 export class JsonSessionRepository implements SessionRepositoryLike {
   private stateDir: string;

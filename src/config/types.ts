@@ -1,4 +1,4 @@
-import type { AgentName, PlatformKind, TelegramMode } from '../shared/index.js';
+import type { AgentName, PlatformKind, TelegramMode } from '../shared';
 
 export interface AgentConfig {
   bin: string;

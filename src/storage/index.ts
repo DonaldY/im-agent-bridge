@@ -1,16 +1,16 @@
-import type { AgentName, PlatformKind } from '../shared/index.js';
-import type { ConversationLogEntry, SessionRecord } from './types.js';
-import { DEFAULT_PLATFORM_KIND } from '../config/index.js';
-import { JsonMessageDedupeStore } from './json-message-dedupe-store.js';
-import { JsonSessionRepository } from './json-session-repository.js';
-import { JsonlConversationLogger } from './jsonl-conversation-logger.js';
-import type { ConversationLoggerLike, MessageDedupeStoreLike, SessionRepositoryLike, StateStoreOptions } from './types.js';
+import type { AgentName, PlatformKind } from '../shared';
+import type { ConversationLogEntry, SessionRecord } from './types';
+import { DEFAULT_PLATFORM_KIND } from '../config';
+import { JsonMessageDedupeStore } from './json-message-dedupe-store';
+import { JsonSessionRepository } from './json-session-repository';
+import { JsonlConversationLogger } from './jsonl-conversation-logger';
+import type { ConversationLoggerLike, MessageDedupeStoreLike, SessionRepositoryLike, StateStoreOptions } from './types';
 
 export {
   JsonMessageDedupeStore,
   JsonSessionRepository,
   JsonlConversationLogger,
-} from './internal.js';
+} from './internal';
 export type {
   ConversationLogEntry,
   ConversationLoggerLike,
@@ -18,7 +18,7 @@ export type {
   SessionRecord,
   SessionRepositoryLike,
   StateStoreOptions,
-} from './internal.js';
+} from './internal';
 
 export class StateStore {
   private sessionRepository: SessionRepositoryLike;

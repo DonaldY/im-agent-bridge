@@ -1,10 +1,10 @@
-import type { AgentEvent, AgentRunOptions, RunState } from '../agent/types.js';
-import type { ReplyTextOptions } from '../client/message-format.js';
-import type { PlatformReplyContext, SentMessageRef } from '../client/types.js';
-import type { AppConfig } from '../config/types.js';
-import type { LoggerLike } from '../shared/index.js';
-import type { StateStore } from '../storage/index.js';
-import type { SessionRecord } from '../storage/types.js';
+import type { AgentEvent, AgentRunOptions, RunState } from '../agent/types';
+import type { ReplyTextOptions } from '../client/message-format';
+import type { PlatformReplyContext, SentMessageRef } from '../client/types';
+import type { AppConfig } from '../config/types';
+import type { LoggerLike } from '../shared';
+import type { StateStore } from '../storage';
+import type { SessionRecord } from '../storage/types';
 
 export type StreamAgentTurnImpl = (options: AgentRunOptions) => AsyncGenerator<AgentEvent>;
 

@@ -1,5 +1,5 @@
-import type { AgentName } from '../shared/index.js';
-import type { AgentConfig, AppConfig } from '../config/types.js';
+import type { AgentName } from '../shared';
+import type { AgentConfig, AppConfig } from '../config/types';
 
 export interface CommandSpec {
   command: string;

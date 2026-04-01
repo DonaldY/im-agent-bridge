@@ -1,24 +1,24 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { streamAgentTurn } from '../agent/runner.js';
-import { buildHelpText, handleBridgeCommand } from './commands.js';
-import { handleBridgePrompt } from './prompt.js';
-import type { RunState } from '../agent/types.js';
-import type { ReplyTextOptions } from '../client/message-format.js';
-import { splitMarkdownBlocks } from '../client/message-format.js';
+import { streamAgentTurn } from '../agent/runner';
+import { buildHelpText, handleBridgeCommand } from './commands';
+import { handleBridgePrompt } from './prompt';
+import type { RunState } from '../agent/types';
+import type { ReplyTextOptions } from '../client/message-format';
+import { splitMarkdownBlocks } from '../client/message-format';
 import type {
   ClientLike,
   IncomingImageAttachment,
   IncomingMessage,
   PlatformReplyContext,
   SentMessageRef,
-} from '../client/types.js';
-import type { AppConfig } from '../config/types.js';
-import type { LoggerLike, PlatformKind } from '../shared/index.js';
-import type { StateStore } from '../storage/index.js';
-import type { SessionRecord } from '../storage/types.js';
-import { formatLogValue, sleep, toErrorMessage } from '../utils.js';
-import type { AgentRunContext, BridgeContext, StreamAgentTurnImpl } from './types.js';
+} from '../client/types';
+import type { AppConfig } from '../config/types';
+import type { LoggerLike, PlatformKind } from '../shared';
+import type { StateStore } from '../storage';
+import type { SessionRecord } from '../storage/types';
+import { formatLogValue, sleep, toErrorMessage } from '../utils';
+import type { AgentRunContext, BridgeContext, StreamAgentTurnImpl } from './types';
 
 function isSupportedConversationType(conversationType?: string): boolean {
   if (!conversationType) {
@@ -94,7 +94,7 @@ function toImageExtension(mimeType: string): string {
   return 'jpg';
 }
 
-export { buildHelpText } from './commands.js';
+export { buildHelpText } from './commands';
 
 export class BridgeFacade {
   private config: AppConfig;

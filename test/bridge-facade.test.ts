@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { BridgeFacade, buildHelpText } from '../src/bridge/index.js';
-import { StateStore } from '../src/storage/index.js';
+import { BridgeFacade, buildHelpText } from '../src/bridge';
+import { StateStore } from '../src/storage';
 
 function createConfig(stateDir, workingDir) {
   return {
@@ -349,6 +349,127 @@ test('BridgeFacade streams updates for editable clients', async () => {
   assert.equal(calls[2][0], 'update');
   assert.equal(calls[2][3], 'progress');
   assert.deepEqual(calls.at(-1), ['update', 'bot-1', '# 标题\n\n**最终完成**', 'final']);
+});
+
+test('BridgeFacade notifies user when agent errors after partial output', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+  await store.createSession('u1', 'codex', workingDir);
+
+  const replies = [];
+  const config = createConfig(stateDir, workingDir);
+  config.bridge.replyChunkChars = 500;
+
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text) {
+      replies.push(text);
+    },
+  }, {
+    async *streamAgentTurnImpl() {
+      yield { type: 'partial_text', text: '先给你一部分结果' };
+      yield { type: 'error', message: 'network timeout\n    at worker.ts:1:1' };
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'dingtalk',
+    userId: 'u1',
+    conversationType: '1',
+    conversationId: 'cid',
+    messageId: 'm-partial-error',
+    text: 'hello',
+    replyContext: { sessionWebhook: 'https://example.com/hook', sessionWebhookExpiredTime: Date.now() + 60_000 },
+  });
+
+  assert.deepEqual(replies, [
+    '🤖 已收到，正在思考中…',
+    '先给你一部分结果',
+    '本次 codex 调用异常，以上内容可能不完整。\n原因：network timeout',
+  ]);
+});
+
+test('BridgeFacade notifies user after editable reply completes with agent error', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+  await store.createSession('u1', 'codex', workingDir);
+
+  const calls = [];
+  const config = createConfig(stateDir, workingDir);
+  config.platform.kind = 'telegram';
+  config.telegram = { allowedUserIds: ['u1'] };
+  config.bridge.replyChunkChars = 500;
+
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text, options) {
+      calls.push(['reply', text, options?.mode]);
+      return { platform: 'telegram', messageId: 'bot-1', chatId: 22 };
+    },
+    async updateText(_replyContext, message, text, options) {
+      calls.push(['update', message.messageId, text, options?.mode]);
+    },
+  }, {
+    async *streamAgentTurnImpl() {
+      yield { type: 'final_text', text: '这是最终结果' };
+      yield { type: 'error', message: 'upstream reset' };
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'telegram',
+    userId: 'u1',
+    conversationType: 'private',
+    conversationId: '22',
+    messageId: 'm-editable-error',
+    text: 'hello',
+    replyContext: { platform: 'telegram', chatId: 22, replyToMessageId: 11 },
+  });
+
+  assert.deepEqual(calls, [
+    ['reply', '🤖 已收到，正在思考中…', 'ack'],
+    ['update', 'bot-1', '这是最终结果', 'final'],
+    ['reply', '本次 codex 调用异常，以上内容可能不完整。\n原因：upstream reset', 'final'],
+  ]);
+});
+
+test('BridgeFacade summarizes thrown prompt errors for user reply', async () => {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-bridge-'));
+  const workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iab-work-'));
+  const store = new StateStore(stateDir);
+  await store.init();
+  await store.createSession('u1', 'codex', workingDir);
+
+  const replies = [];
+  const config = createConfig(stateDir, workingDir);
+  config.bridge.replyChunkChars = 500;
+
+  const bridge = new BridgeFacade(config, store, {
+    async replyText(_replyContext, text) {
+      replies.push(text);
+    },
+  }, {
+    async *streamAgentTurnImpl() {
+      throw new Error('fatal launch failure\nstack line');
+    },
+  });
+
+  await bridge.handleIncomingMessage({
+    platform: 'dingtalk',
+    userId: 'u1',
+    conversationType: '1',
+    conversationId: 'cid',
+    messageId: 'm-throw-error',
+    text: 'hello',
+    replyContext: { sessionWebhook: 'https://example.com/hook', sessionWebhookExpiredTime: Date.now() + 60_000 },
+  });
+
+  assert.deepEqual(replies, [
+    '🤖 已收到，正在思考中…',
+    '处理失败：fatal launch failure',
+  ]);
 });
 
 test('BridgeFacade rejects image when image input is disabled', async () => {

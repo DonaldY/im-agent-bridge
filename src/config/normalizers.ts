@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { AgentName, PlatformKind, TelegramMode } from '../shared/index.js';
+import type { AgentName, PlatformKind, TelegramMode } from '../shared';
 import type {
   AgentConfig,
   AppConfig,
@@ -7,8 +7,8 @@ import type {
   FeishuConfig,
   NetworkConfig,
   TelegramConfig,
-} from './types.js';
-import { coerceStringArray, expandHomePath, isStringArray } from '../utils.js';
+} from './types';
+import { coerceStringArray, expandHomePath, isStringArray } from '../utils';
 import {
   DEFAULT_PLATFORM_KIND,
   VALID_AGENTS,
@@ -17,7 +17,7 @@ import {
   asRecord,
   defaultStateDir,
   normalizeWebhookPath,
-} from './core.js';
+} from './core';
 
 function normalizeAgentEnvEntries(entries: Array<[string, unknown]>, label: string): Record<string, string> {
   const normalized: Array<[string, string]> = [];

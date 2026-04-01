@@ -1,7 +1,7 @@
-import type { AppConfig } from '../config/types.js';
-import type { ClientLike } from './types.js';
-import { PLATFORM_CLIENT_REGISTRY } from './registry.js';
-import type { ClientFactoryOptions } from './registry.js';
+import type { AppConfig } from '../config/types';
+import type { ClientLike } from './types';
+import { PLATFORM_CLIENT_REGISTRY } from './registry';
+import type { ClientFactoryOptions } from './registry';
 
 export function createPlatformClient(config: AppConfig, options: ClientFactoryOptions = {}): ClientLike {
   const platformKind = config.platform.kind;

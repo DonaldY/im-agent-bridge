@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
-import type { AgentName, PlatformKind } from '../shared/index.js';
-import type { SessionRecord } from './types.js';
-import { cloneJson, nowIso } from '../utils.js';
-import { DEFAULT_PLATFORM_KIND } from '../config/index.js';
+import type { AgentName, PlatformKind } from '../shared';
+import type { SessionRecord } from './types';
+import { cloneJson, nowIso } from '../utils';
+import { DEFAULT_PLATFORM_KIND } from '../config';
 
 export function emptyProviderSessionIds(): Record<AgentName, string | null> {
   return {

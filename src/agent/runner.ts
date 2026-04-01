@@ -1,7 +1,7 @@
-import type { AgentName } from '../shared/index.js';
-import type { AppConfig } from '../config/types.js';
-import type { AgentEvent, AgentRunOptions, CommandSpec } from './types.js';
-import { createAgentProvider } from './factory.js';
+import type { AgentName } from '../shared';
+import type { AppConfig } from '../config/types';
+import type { AgentEvent, AgentRunOptions, CommandSpec } from './types';
+import { createAgentProvider } from './factory';
 
 export function buildAgentCommandSpec(
   config: AppConfig,

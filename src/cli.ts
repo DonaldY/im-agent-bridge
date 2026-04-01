@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import { applyRuntimeEnvironment, defaultConfigPath, loadConfig } from './config/index.js';
-import { StateStore } from './storage/index.js';
-import { createPlatformClient } from './client/index.js';
-import { BridgeFacade } from './bridge/index.js';
-import { runDoctor } from './doctor.js';
-import { runServiceCommand } from './service/index.js';
-import { runSetup } from './setup.js';
-import { toErrorMessage } from './utils.js';
+import { applyRuntimeEnvironment, defaultConfigPath, loadConfig } from './config';
+import { StateStore } from './storage';
+import { createPlatformClient } from './client';
+import { BridgeFacade } from './bridge';
+import { runDoctor } from './doctor';
+import { runServiceCommand } from './service';
+import { runSetup } from './setup';
+import { toErrorMessage } from './utils';
 
 function printUsage() {
   console.log([

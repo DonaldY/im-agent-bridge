@@ -1,5 +1,5 @@
-import type { PlatformKind } from '../shared/index.js';
-import type { ReplyTextOptions } from './message-format.js';
+import type { PlatformKind } from '../shared';
+import type { ReplyTextOptions } from './message-format';
 
 export interface PlatformReplyContextBase {
   platform: PlatformKind;

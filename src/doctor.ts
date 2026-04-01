@@ -1,7 +1,7 @@
-import { resolveAgentBinary } from './config/index.js';
-import type { DoctorOptions } from './shared/index.js';
-import type { AppConfig } from './config/types.js';
-import { fileExists, formatCheckResult, isWritableDirectory, toErrorMessage } from './utils.js';
+import { resolveAgentBinary } from './config';
+import type { DoctorOptions } from './shared';
+import type { AppConfig } from './config/types';
+import { fileExists, formatCheckResult, isWritableDirectory, toErrorMessage } from './utils';
 
 const STREAM_TOPIC = '/v1.0/im/bot/messages/get';
 const FEISHU_BASE_URL = 'https://open.feishu.cn/open-apis';

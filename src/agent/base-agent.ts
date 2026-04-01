@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { resolveAgentBinary, resolveAgentEnvironment } from '../config/index.js';
-import type { AgentName } from '../shared/index.js';
-import type { AgentConfig, AppConfig } from '../config/types.js';
-import type { AgentEvent, AgentProviderLike, AgentStreamOptions, BuildArgsOptions, CommandSpec, ParserState } from './types.js';
-import { normalizeSpawn, toErrorMessage } from '../utils.js';
+import { resolveAgentBinary, resolveAgentEnvironment } from '../config';
+import type { AgentName } from '../shared';
+import type { AgentConfig, AppConfig } from '../config/types';
+import type { AgentEvent, AgentProviderLike, AgentStreamOptions, BuildArgsOptions, CommandSpec, ParserState } from './types';
+import { normalizeSpawn, toErrorMessage } from '../utils';
 
 export abstract class BaseAgent implements AgentProviderLike {
   public readonly config: AppConfig;

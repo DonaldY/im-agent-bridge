@@ -1,9 +1,9 @@
-import type { AgentName } from '../shared/index.js';
-import type { RunState } from '../agent/types.js';
-import type { IncomingMessage } from '../client/types.js';
-import type { AppConfig } from '../config/types.js';
-import type { SessionRecord } from '../storage/types.js';
-import type { BridgeContext } from './types.js';
+import type { AgentName } from '../shared';
+import type { RunState } from '../agent/types';
+import type { IncomingMessage } from '../client/types';
+import type { AppConfig } from '../config/types';
+import type { SessionRecord } from '../storage/types';
+import type { BridgeContext } from './types';
 
 export const INTERRUPT_COMMANDS = new Set(['/interrupt', '/stop', '/cancel']);
 

@@ -1,4 +1,4 @@
-import type { AgentName, PlatformKind } from '../shared/index.js';
+import type { AgentName, PlatformKind } from '../shared';
 
 export interface SessionRecord {
   id: string;

@@ -12,7 +12,7 @@ export {
   resolveAgentBinary,
   resolveAgentEnvironment,
   applyRuntimeEnvironment,
-} from './core.js';
+} from './core';
 export {
   normalizeAgentConfig,
   normalizeNetworkConfig,
@@ -20,5 +20,5 @@ export {
   normalizeFeishuConfig,
   normalizeTelegramConfig,
   normalizeConfig,
-} from './normalizers.js';
-export { loadConfig } from './loader.js';
+} from './normalizers';
+export { loadConfig } from './loader';

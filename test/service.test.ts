@@ -5,7 +5,7 @@ import {
   normalizeKeepAwakeMode,
   normalizeServiceLabel,
   parseLaunchctlPrint,
-} from '../src/service/index.js';
+} from '../src/service';
 
 test('normalizeKeepAwakeMode parses valid values', () => {
   assert.equal(normalizeKeepAwakeMode(undefined), 'none');

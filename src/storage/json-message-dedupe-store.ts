@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { ensureDir, readJson, writeJsonAtomic } from '../utils.js';
-import type { MessageDedupeStoreLike } from './types.js';
+import { ensureDir, readJson, writeJsonAtomic } from '../utils';
+import type { MessageDedupeStoreLike } from './types';
 
 export class JsonMessageDedupeStore implements MessageDedupeStoreLike {
   private stateDir: string;

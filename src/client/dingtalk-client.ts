@@ -1,17 +1,17 @@
 import { DWClient, EventAck, TOPIC_ROBOT } from 'dingtalk-stream-sdk-nodejs';
-import type { LoggerLike } from '../shared/index.js';
-import type { DingTalkConfig } from '../config/types.js';
-import { renderReply } from './message-format.js';
-import type { ReplyTextOptions } from './message-format.js';
+import type { LoggerLike } from '../shared';
+import type { DingTalkConfig } from '../config/types';
+import { renderReply } from './message-format';
+import type { ReplyTextOptions } from './message-format';
 import type {
   DingTalkReplyContext,
   DownloadImageOptions,
   DownloadedImageFile,
   IncomingImageAttachment,
   IncomingMessage,
-} from './types.js';
-import { BaseClient } from './base-client.js';
-import { formatLogValue, toErrorMessage, toUtf8String } from '../utils.js';
+} from './types';
+import { BaseClient } from './base-client';
+import { formatLogValue, toErrorMessage, toUtf8String } from '../utils';
 
 interface DingTalkClientOptions {
   fetchImpl?: typeof fetch;

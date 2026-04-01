@@ -1,17 +1,45 @@
-import { takeStableMarkdownStream } from '../client/message-format.js';
-import type { RunState } from '../agent/types.js';
-import type { SentMessageRef } from '../client/types.js';
-import { toErrorMessage } from '../utils.js';
-import type { IncomingMessage } from '../client/types.js';
-import type { SessionRecord } from '../storage/types.js';
-import type { BridgeContext } from './types.js';
+import { takeStableMarkdownStream } from '../client/message-format';
+import type { RunState } from '../agent/types';
+import type { SentMessageRef } from '../client/types';
+import { toErrorMessage } from '../utils';
+import type { IncomingMessage } from '../client/types';
+import type { SessionRecord } from '../storage/types';
+import type { BridgeContext } from './types';
 
 const ACK_TEXT = '🤖 已收到，正在思考中…';
 const STREAM_UPDATE_INTERVAL_MS = 900;
 const STREAM_MIN_LENGTH = 160;
+const ERROR_SUMMARY_MAX_CHARS = 200;
 
 function supportsEditableReply(incomingMessage: IncomingMessage): boolean {
   return incomingMessage.platform === 'telegram' || incomingMessage.platform === 'feishu';
+}
+
+function summarizeErrorMessage(message: string): string {
+  const firstLine = message
+    .split(/\r?\n/gu)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+
+  if (!firstLine) {
+    return '未知错误';
+  }
+
+  const normalized = firstLine.replace(/^[A-Za-z]*Error:\s*/u, '');
+
+  if (normalized.length <= ERROR_SUMMARY_MAX_CHARS) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, ERROR_SUMMARY_MAX_CHARS - 3)}...`;
+}
+
+function buildFailureReply(message: string): string {
+  return `处理失败：${summarizeErrorMessage(message)}`;
+}
+
+function buildFailureNotice(agent: string, message: string): string {
+  return `本次 ${agent} 调用异常，以上内容可能不完整。\n原因：${summarizeErrorMessage(message)}`;
 }
 
 export async function handleBridgePrompt(
@@ -222,7 +250,10 @@ export async function handleBridgePrompt(
       return;
     }
 
-    const reply = finalText || partialText || (errors[0] ? `处理失败：${errors[0]}` : '未获得可用回复。');
+    const reply = finalText || partialText || (errors[0] ? buildFailureReply(errors[0]) : '未获得可用回复。');
+    const failureNotice = errors[0] && (finalText || partialText)
+      ? buildFailureNotice(agent, errors[0])
+      : null;
 
     if (replyMessage && canEditReply) {
       await context.updateText(
@@ -238,6 +269,20 @@ export async function handleBridgePrompt(
         },
         { mode: 'final' },
       );
+      if (failureNotice) {
+        await context.replyText(
+          incomingMessage.replyContext,
+          failureNotice,
+          {
+            messageId: incomingMessage.messageId,
+            sessionId: currentSession.id,
+            agent,
+            providerSessionId: activeRun.providerSessionId || 'starting',
+            phase: 'error',
+          },
+          { mode: 'final' },
+        );
+      }
     } else if (streamReplies) {
       const tail = finalText && partialText && finalText !== partialText
         ? finalText
@@ -257,6 +302,20 @@ export async function handleBridgePrompt(
           { mode: 'final' },
         );
       }
+      if (failureNotice) {
+        await context.replyText(
+          incomingMessage.replyContext,
+          failureNotice,
+          {
+            messageId: incomingMessage.messageId,
+            sessionId: currentSession.id,
+            agent,
+            providerSessionId: activeRun.providerSessionId || 'starting',
+            phase: 'error',
+          },
+          { mode: 'final' },
+        );
+      }
     } else {
       await context.replyText(
         incomingMessage.replyContext,
@@ -270,6 +329,20 @@ export async function handleBridgePrompt(
         },
         { mode: 'final' },
       );
+      if (failureNotice) {
+        await context.replyText(
+          incomingMessage.replyContext,
+          failureNotice,
+          {
+            messageId: incomingMessage.messageId,
+            sessionId: currentSession.id,
+            agent,
+            providerSessionId: activeRun.providerSessionId || 'starting',
+            phase: 'error',
+          },
+          { mode: 'final' },
+        );
+      }
     }
 
     await context.store.appendConversationLog(currentSession.id, {
@@ -295,13 +368,14 @@ export async function handleBridgePrompt(
       return;
     }
 
-    const message = `处理失败：${toErrorMessage(error)}`;
+    const rawErrorMessage = toErrorMessage(error);
+    const message = buildFailureReply(rawErrorMessage);
     await context.store.appendConversationLog(currentSession.id, {
       direction: 'out',
       platform: incomingMessage.platform,
       agent,
       providerSessionId: activeRun.providerSessionId,
-      errors: [message],
+      errors: [rawErrorMessage],
       durationMs: Date.now() - startedAt,
     });
 

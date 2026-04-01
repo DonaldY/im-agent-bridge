@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
-import { parseToml } from '../toml.js';
-import type { AppConfig } from './types.js';
-import { defaultConfigPath, validatePlatformConfig } from './core.js';
-import { normalizeConfig } from './normalizers.js';
+import { parseToml } from '../toml';
+import type { AppConfig } from './types';
+import { defaultConfigPath, validatePlatformConfig } from './core';
+import { normalizeConfig } from './normalizers';
 
 export async function loadConfig(configPath = defaultConfigPath()): Promise<AppConfig> {
   const raw = await fs.readFile(configPath, 'utf8');

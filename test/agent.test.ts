@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAgentCommandSpec } from '../src/agent/index.js';
+import { buildAgentCommandSpec } from '../src/agent';
 import {
   parseClaudeLine,
   parseCodexLine,
-} from '../src/agent/internal.js';
+} from '../src/agent/internal';
 
 test('parseClaudeLine handles stream-json output', () => {
   const state = {};

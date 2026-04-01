@@ -1,9 +1,9 @@
 import * as Lark from '@larksuiteoapi/node-sdk';
 import { Readable } from 'node:stream';
-import type { LoggerLike } from '../shared/index.js';
-import type { FeishuConfig } from '../config/types.js';
-import { renderReply } from './message-format.js';
-import type { ReplyTextOptions } from './message-format.js';
+import type { LoggerLike } from '../shared';
+import type { FeishuConfig } from '../config/types';
+import { renderReply } from './message-format';
+import type { ReplyTextOptions } from './message-format';
 import type {
   DownloadImageOptions,
   DownloadedImageFile,
@@ -11,9 +11,9 @@ import type {
   IncomingImageAttachment,
   IncomingMessage,
   SentMessageRef,
-} from './types.js';
-import { BaseClient } from './base-client.js';
-import { toErrorMessage } from '../utils.js';
+} from './types';
+import { BaseClient } from './base-client';
+import { toErrorMessage } from '../utils';
 
 interface FeishuClientOptions {
   sdk?: typeof Lark;

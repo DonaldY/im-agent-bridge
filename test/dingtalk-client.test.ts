@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DingTalkClient, normalizeRobotMessage } from '../src/client/dingtalk-client.js';
+import { DingTalkClient, normalizeRobotMessage } from '../src/client/dingtalk-client';
 
 test('normalizeRobotMessage prefers senderStaffId', () => {
   const message = normalizeRobotMessage({

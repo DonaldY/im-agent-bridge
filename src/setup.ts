@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensureDir, fileExists } from './utils.js';
+import { ensureDir, fileExists } from './utils';
 
 const FALLBACK_CONFIG_TEMPLATE = `[platform]
 kind = "dingtalk"
