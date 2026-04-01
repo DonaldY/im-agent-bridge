@@ -12,14 +12,15 @@
 - 支持会话隔离：每位用户独立 session，保留 provider session 续聊
 - 支持权限与稳定性能力：白名单、消息去重、调试日志
 - 支持图片输入（飞书/钉钉，单图；仅 `codex` agent）
+- 支持附件回传：飞书支持图片/文件，钉钉支持图片
 - 提供 `doctor`、`setup`、`service` 等运维命令
 
 ## Support Matrix
 
 | 平台 | 支持 Agent | 支持功能 |
 | --- | --- | --- |
-| DingTalk | `codex`、`claude`（及你配置的本地 CLI） | 单聊文本、`/help` `/new` `/use` `/set_working_dir` `/status` `/interrupt`、流式回复、长文本分段、白名单、去重、调试日志、单图输入（仅 `codex`） |
-| Feishu | `codex`、`claude`（及你配置的本地 CLI） | 单聊文本、`/help` `/new` `/use` `/set_working_dir` `/status` `/interrupt`、流式回复、长文本分段、白名单、去重、调试日志、单图输入（仅 `codex`） |
+| DingTalk | `codex`、`claude`（及你配置的本地 CLI） | 单聊文本、`/help` `/new` `/use` `/set_working_dir` `/status` `/interrupt`、流式回复、长文本分段、白名单、去重、调试日志、单图输入（仅 `codex`）、图片回传 |
+| Feishu | `codex`、`claude`（及你配置的本地 CLI） | 单聊文本、`/help` `/new` `/use` `/set_working_dir` `/status` `/interrupt`、流式回复、长文本分段、白名单、去重、调试日志、单图输入（仅 `codex`）、图片/文件回传 |
 | Telegram | `codex`、`claude`（及你配置的本地 CLI） | 单聊文本、`/help` `/new` `/use` `/set_working_dir` `/status` `/interrupt`、流式回复、长文本分段、白名单、去重、调试日志、`poll`/`webhook` 模式（当前不支持图片输入） |
 
 ## Requirements
@@ -122,6 +123,14 @@ Linux 生产部署建议优先使用 `systemd` 或 `pm2`。
 - `bridge.image_enabled`、`bridge.image_max_mb`：图片能力控制
 - `bridge.debug`：调试日志（也可通过 `IAB_DEBUG=1`）
 
+当前附件回传无需额外配置开关，按平台能力自动生效：
+
+- 飞书：图片/文件回传
+- 钉钉：图片回传
+- Telegram：暂不支持
+
+可参考 `config.example.toml` 中 `[bridge]` 段的注释了解产物输出目录约定。
+
 ## CLI Commands
 
 ```bash
@@ -170,6 +179,51 @@ ANTHROPIC_AUTH_TOKEN = "sk-..."
 - `/interrupt`：中断当前正在执行的模型任务
 
 直接发送文本即可获得回复。
+
+`/help` 与 `/status` 会根据当前平台显示附件回传能力，例如“飞书支持图片与文件回传”“钉钉仅支持图片回传”。
+
+## 附件回传
+
+当用户在 IM 中自然语言要求“把图片发我”“导出成文件发我”时，bridge 可以把 agent 在本地产生的产物回传到当前会话。
+
+- 飞书：支持图片与文件回传
+- 钉钉：当前仅支持图片回传
+- Telegram：当前不支持附件回传
+
+附件回传通过每轮任务的产物清单驱动。agent 需要在当前工作目录下写入：
+
+- 输出目录：`.im-agent-bridge/outgoing/<sessionId>/<messageId>/`
+- 清单文件：`manifest.json`
+
+`manifest.json` 格式示例：
+
+```json
+{
+  "attachments": [
+    {
+      "kind": "image",
+      "path": "chart.png",
+      "name": "chart.png",
+      "mimeType": "image/png"
+    },
+    {
+      "kind": "file",
+      "path": "report.csv",
+      "name": "report.csv",
+      "mimeType": "text/csv"
+    }
+  ]
+}
+```
+
+说明：
+
+- `path` 可以是输出目录内的相对路径，bridge 会做越界校验
+- 只有真正写入 `manifest.json` 的文件才会被回传
+- 飞书支持 `kind = "image" | "file"`
+- 钉钉当前只支持 `kind = "image"`；若产出 `file`，会回文本提示当前平台不支持
+- 单轮最多回传 3 个附件
+- 大小限制：图片 10 MB，文件 30 MB
 
 ## Telegram Notes
 

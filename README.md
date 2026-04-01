@@ -12,14 +12,15 @@ A TypeScript service that bridges `DingTalk` / `Feishu` / `Telegram` messages to
 - Isolates sessions per user while preserving provider sessions for continuation
 - Includes whitelist control, deduplication, and debug logs
 - Supports image input on DingTalk/Feishu (single image, `codex` only)
+- Supports outgoing attachment return: Feishu supports images/files, DingTalk supports images
 - Includes `doctor`, `setup`, and `service` commands for operations
 
 ## Support Matrix
 
 | Platform | Supported Agents | Supported Capabilities |
 | --- | --- | --- |
-| DingTalk | `codex`, `claude` (and any configured local CLI) | 1:1 text chat, `/help` `/new` `/use` `/set_working_dir` `/status` `/interrupt`, streaming replies, chunked long replies, whitelist, dedupe, debug logs, single-image input (`codex` only) |
-| Feishu | `codex`, `claude` (and any configured local CLI) | 1:1 text chat, `/help` `/new` `/use` `/set_working_dir` `/status` `/interrupt`, streaming replies, chunked long replies, whitelist, dedupe, debug logs, single-image input (`codex` only) |
+| DingTalk | `codex`, `claude` (and any configured local CLI) | 1:1 text chat, `/help` `/new` `/use` `/set_working_dir` `/status` `/interrupt`, streaming replies, chunked long replies, whitelist, dedupe, debug logs, single-image input (`codex` only), image return |
+| Feishu | `codex`, `claude` (and any configured local CLI) | 1:1 text chat, `/help` `/new` `/use` `/set_working_dir` `/status` `/interrupt`, streaming replies, chunked long replies, whitelist, dedupe, debug logs, single-image input (`codex` only), image/file return |
 | Telegram | `codex`, `claude` (and any configured local CLI) | 1:1 text chat, `/help` `/new` `/use` `/set_working_dir` `/status` `/interrupt`, streaming replies, chunked long replies, whitelist, dedupe, debug logs, `poll`/`webhook` modes (image input not supported yet) |
 
 ## Requirements
@@ -122,6 +123,14 @@ Common optional fields:
 - `bridge.image_enabled`, `bridge.image_max_mb`: image input controls
 - `bridge.debug`: debug logs (or set `IAB_DEBUG=1`)
 
+Attachment return currently does not require a separate feature flag. It is enabled automatically based on platform capability:
+
+- Feishu: image + file return
+- DingTalk: image return
+- Telegram: not supported yet
+
+See the `[bridge]` comments in `config.example.toml` for the artifact output directory convention.
+
 ## CLI Commands
 
 ```bash
@@ -170,6 +179,51 @@ Available in IM chat:
 - `/interrupt`: interrupt the current running model task
 
 You can send plain text directly to get replies.
+
+`/help` and `/status` now show the current platform's attachment return capability, for example "Feishu supports image/file return" or "DingTalk supports image return only".
+
+## Attachment Return
+
+When a user asks naturally in IM to "send me the image" or "export the result as a file and send it back", the bridge can return locally generated artifacts back to the current chat.
+
+- Feishu: supports image and file return
+- DingTalk: currently supports image return only
+- Telegram: attachment return is not supported yet
+
+Attachment return is driven by a per-turn artifact manifest. The agent should write output into the current working directory under:
+
+- output directory: `.im-agent-bridge/outgoing/<sessionId>/<messageId>/`
+- manifest file: `manifest.json`
+
+Example `manifest.json`:
+
+```json
+{
+  "attachments": [
+    {
+      "kind": "image",
+      "path": "chart.png",
+      "name": "chart.png",
+      "mimeType": "image/png"
+    },
+    {
+      "kind": "file",
+      "path": "report.csv",
+      "name": "report.csv",
+      "mimeType": "text/csv"
+    }
+  ]
+}
+```
+
+Notes:
+
+- `path` may be relative to the output directory; the bridge validates path traversal
+- Only files declared in `manifest.json` are returned to IM
+- Feishu supports `kind = "image" | "file"`
+- DingTalk currently supports `kind = "image"` only; `file` entries are rejected with a text notice
+- Up to 3 attachments are returned per turn
+- Size limits: images 10 MB, files 30 MB
 
 ## Telegram Notes
 
